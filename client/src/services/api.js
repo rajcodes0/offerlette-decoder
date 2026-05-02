@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-   credentials: "include",
+   withCredentials: true,
   timeout: 60000,
 })
 
@@ -28,9 +28,9 @@ export const authAPI = {
 
 export const analysisAPI = {
   analyze: (formData) => api.post('/api/analyze', formData),
-  getAll: () => api.get('/api/analyses'),
-  getById: (id) => api.get(`/api/analyses/${id}`),
-  delete: (id) => api.delete(`/api/analyses/${id}`),
+  getAll: () => api.get('/api/analyze'),
+  getById: (id) => api.get(`/api/analyze/${id}`),
+  delete: (id) => api.delete(`/api/analyze/${id}`),
 }
 
 export default api
