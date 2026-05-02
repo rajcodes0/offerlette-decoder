@@ -1,6 +1,6 @@
 import  { GoogleGenerativeAI } from '@google/generative-ai'
 
-async function analyzewithGemini(offerText) {
+async function analyzeWithGemini(offerText) {
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
@@ -64,4 +64,4 @@ try{
 }
 }
 
-export default analyzewithGemini;
+export default analyzeWithGemini;
