@@ -1,0 +1,291 @@
+Here's the full system design for OfferLetter Decoder.
+
+---
+
+## Product Overview
+
+A web app where users upload or paste a job offer letter, and get back a structured breakdown: plain-language clause explanations, red flag detection, market salary comparison, and a ready-to-use negotiation script.
+
+---
+
+## Core Features (MVP)
+
+1. Upload PDF or paste raw text
+2. AI clause extraction and plain-language explanation
+3. Red flag detection (non-compete, IP assignment, at-will, probation traps)
+4. Salary benchmarking (vs market data)
+5. Negotiation script generator
+6. Save and revisit past analyses (requires auth)
+
+---
+
+## Architecture Overview
+
+```
+Client (React + Vite + Tailwind)
+        |
+        v
+API Server (Express.js)
+        |
+   _____|_____
+  |           |
+MongoDB     Gemini API
+(users,     (analysis)
+analyses)
+        |
+   pdf-parse
+   (PDF extraction)
+```
+
+---
+
+## Frontend — React + Vite + Tailwind
+
+**Pages:**
+- `/` — Landing page with upload/paste input
+- `/result/:id` — Analysis result page
+- `/dashboard` — Saved analyses (auth required)
+- `/login` and `/signup`
+
+**Key Components:**
+
+```
+UploadBox       → drag-drop PDF or paste textarea
+AnalysisCard    → one card per clause
+RedFlagBadge    → red/yellow/green pill tags
+SalaryMeter     → visual bar showing offer vs market
+NegotiationBox  → generated script, copyable
+```
+
+**State management:** Zustand (you already know it)
+- `useUploadStore` — file/text input state
+- `useAnalysisStore` — result data, loading states
+- `useAuthStore` — user session
+
+---
+
+## Backend — Express.js
+
+**Route structure:**
+
+```
+POST /api/analyze          → main analysis endpoint
+POST /api/auth/register
+POST /api/auth/login
+GET  /api/analyses/:userId → fetch saved analyses
+GET  /api/analyses/:id     → single saved analysis
+DELETE /api/analyses/:id
+```
+
+**Middleware:**
+- `multer` — handle PDF file uploads
+- `pdf-parse` — extract raw text from PDF
+- `express-rate-limit` — prevent Gemini API abuse
+- JWT auth middleware on protected routes
+
+---
+
+## PDF Processing Pipeline
+
+```
+User uploads PDF
+      |
+  multer saves to /tmp
+      |
+  pdf-parse extracts raw text
+      |
+  text cleaned (strip extra whitespace, headers, page numbers)
+      |
+  sent to Gemini with structured prompt
+      |
+  JSON response parsed and saved to MongoDB
+```
+
+For pasted text, skip straight to the Gemini step.
+
+---
+
+## Gemini Prompt Design
+
+This is the most important part. You send one structured prompt:
+
+```
+You are a legal and HR expert. Analyze this job offer letter and return ONLY a JSON object with this exact structure:
+
+{
+  "clauses": [
+    {
+      "title": "string",
+      "originalText": "string",
+      "plainExplanation": "string",
+      "riskLevel": "green | yellow | red",
+      "riskReason": "string or null"
+    }
+  ],
+  "overallRiskScore": 1-10,
+  "salaryAssessment": {
+    "offeredAmount": "string",
+    "currency": "string",
+    "marketComparison": "below | market | above",
+    "note": "string"
+  },
+  "negotiationScript": "string",
+  "topRedFlags": ["string"]
+}
+
+Offer letter text:
+"""
+{{OFFER_TEXT}}
+"""
+```
+
+Parse the response with `JSON.parse()`. Add a try/catch — if Gemini returns malformed JSON, retry once with a stricter prompt.
+
+---
+
+## MongoDB Schema
+
+**User:**
+```js
+{
+  _id, email, passwordHash,
+  createdAt
+}
+```
+
+**Analysis:**
+```js
+{
+  _id,
+  userId,          // null if anonymous
+  inputType,       // "pdf" | "text"
+  rawText,         // extracted/pasted text
+  result: {        // full Gemini JSON output
+    clauses: [],
+    overallRiskScore,
+    salaryAssessment,
+    negotiationScript,
+    topRedFlags
+  },
+  createdAt
+}
+```
+
+Anonymous users get a result but it's not saved. Prompt them to sign up to save it — this is your conversion hook.
+
+---
+
+## Auth Flow
+
+JWT-based, simple:
+- Register → hash password with bcrypt → save user → return JWT
+- Login → verify password → return JWT
+- JWT stored in `localStorage`, sent as `Authorization: Bearer` header
+- Protected routes check token with middleware
+
+No OAuth for MVP. Add Google OAuth in v2.
+
+---
+
+## Rate Limiting Strategy
+
+Gemini API costs money per call. Protect it:
+
+```js
+// In Express
+const rateLimit = require('express-rate-limit')
+
+const analyzeLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 3,                    // 3 analyses per IP per hour for anon users
+  message: 'Too many requests. Sign up for more.'
+})
+
+app.use('/api/analyze', analyzeLimiter)
+```
+
+Logged-in users get higher limits (10/hour).
+
+---
+
+## Salary Benchmarking
+
+You have two options:
+
+**Option A (MVP — AI-based):** Let Gemini estimate market salary from its training data. It knows approximate ranges. Not perfectly accurate but good enough for v1. Zero extra API cost.
+
+**Option B (v2 — real data):** Integrate with a free public dataset. Levels.fyi has no public API but you can scrape it. Better option: use the **LinkedIn Salary API** or **Glassdoor API** (both have free tiers). For India-specific: use **AmbitionBox** data.
+
+Start with Option A. Ship fast.
+
+---
+
+## Folder Structure
+
+```
+offerletter-decoder/
+├── client/
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── store/        ← Zustand
+│   │   ├── api/          ← axios calls
+│   │   └── App.jsx
+│   └── vite.config.js
+│
+├── server/
+│   ├── routes/
+│   │   ├── analyze.js
+│   │   └── auth.js
+│   ├── models/
+│   │   ├── User.js
+│   │   └── Analysis.js
+│   ├── middleware/
+│   │   ├── auth.js
+│   │   └── upload.js
+│   ├── utils/
+│   │   ├── pdfExtract.js
+│   │   └── gemini.js
+│   └── index.js
+│
+└── .env
+```
+
+---
+
+## Deployment (Zero Cost)
+
+| Part | Platform |
+|---|---|
+| Frontend | Vercel |
+| Backend | Render (free tier) |
+| Database | MongoDB Atlas free tier |
+| File uploads | /tmp on server (don't store PDFs) |
+| Domain | Freenom or .tech for ₹99/yr |
+
+Never store the actual PDF. Extract text, discard the file. Keeps storage at zero and avoids privacy issues.
+
+---
+
+## Build Order
+
+1. Set up Express server + MongoDB connection
+2. Build PDF upload + text extraction
+3. Write and test the Gemini prompt until JSON output is stable
+4. Build the result page UI (most visual, most impressive)
+5. Add auth + save/dashboard
+6. Add rate limiting
+7. Deploy
+
+Do not build auth first. Build the core analysis flow first so you have something to show immediately.
+
+---
+
+## What Makes This Resume-Worthy
+
+- Shows full MERN + AI integration
+- Real prompt engineering (structured JSON output)
+- PDF processing pipeline
+- Rate limiting and API cost awareness
+- Actual product thinking (conversion hook, anonymous → signup flow)
+- Deployable and usable by real people today
