@@ -1,0 +1,154 @@
+.checkout-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.checkout-card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 40px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+}
+
+.checkout-card h1 {
+  font-size: 32px;
+  color: #1f2937;
+  margin-bottom: 10px;
+}
+
+.subtitle {
+  color: #6b7280;
+  font-size: 16px;
+  margin-bottom: 30px;
+}
+
+.pricing-box {
+  background: #f3f4f6;
+  border-radius: 8px;
+  padding: 30px;
+  margin: 30px 0;
+  border: 2px solid #e5e7eb;
+}
+
+.price {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.currency {
+  font-size: 20px;
+  color: #667eea;
+  font-weight: 600;
+}
+
+.amount {
+  font-size: 48px;
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.period {
+  font-size: 14px;
+  color: #6b7280;
+  margin-left: 10px;
+}
+
+.price-note {
+  color: #9ca3af;
+  font-size: 14px;
+  margin: 0;
+}
+
+.features {
+  list-style: none;
+  padding: 0;
+  margin: 30px 0;
+  text-align: left;
+}
+
+.features li {
+  padding: 12px 0;
+  color: #374151;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 15px;
+}
+
+.features li:last-child {
+  border-bottom: none;
+}
+
+.error-message {
+  background: #fee2e2;
+  color: #991b1b;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.success-message {
+  background: #dcfce7;
+  color: #166534;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+.pay-button {
+  width: 100%;
+  padding: 14px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-top: 10px;
+}
+
+.pay-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+}
+
+.pay-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secure-note {
+  color: #9ca3af;
+  font-size: 13px;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .checkout-card {
+    padding: 24px;
+  }
+
+  .checkout-card h1 {
+    font-size: 24px;
+  }
+
+  .amount {
+    font-size: 36px;
+  }
+
+  .pricing-box {
+    padding: 20px;
+  }
+}
