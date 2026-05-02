@@ -1,8 +1,17 @@
 import axios from 'axios'
 
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem("lex_token");
+
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
-   withCredentials: true,
+  withCredentials: true,
   timeout: 60000,
 })
 
