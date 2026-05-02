@@ -12,17 +12,17 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       localStorage.removeItem('lex_token')
       localStorage.removeItem('lex_user')
-      window.location.href = '/login'
+      window.location.href = '/login'   
     }
     return Promise.reject(error)
   }
 )
 
 export const authAPI = {
-  register: (data) => api.post('/api/register', data),
-  login: (data) => api.post('/api/login', data),
-  forgotPassword: (email) => api.post('/api/forgot-password', { email }),
-  resetPassword: (token, data) => api.post(`/api/reset-password/${token}`, data),
+  register: (data) => api.post('/api/auth/register', data),
+  login: (data) => api.post('/api/auth/login', data),
+  forgotPassword: (email) => api.post('/api/auth/forgot-password', { email }),
+  resetPassword: (token, data) => api.post(`/api/auth/reset-password/${token}`, data),
 }
 
 export const analysisAPI = {
