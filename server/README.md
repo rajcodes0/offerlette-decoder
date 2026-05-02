@@ -1,8 +1,4 @@
-Here’s a **clean, production-level README** tailored to your current state (frontend deployed, backend likely separate, Razorpay not initialized yet). I’ve removed fluff and focused on clarity + credibility.
-
----
-
-# 🚀 OfferLetter Decoder
+🚀 OfferLetter Decoder
 
 **Live App:** [https://a5ecdbce.offerlette-decoder.pages.dev/](https://a5ecdbce.offerlette-decoder.pages.dev/)
 
