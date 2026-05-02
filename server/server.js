@@ -12,7 +12,8 @@ const app = express();
 await connectDb();
 
 app.use(cors({
-  origin:"https://a5ecdbce.offerlette-decoder.pages.dev"
+  origin:"https://a5ecdbce.offerlette-decoder.pages.dev",
+  credentials: true
 }));
 app.use(express.json());
 
