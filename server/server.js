@@ -11,7 +11,9 @@ const app = express();
 // Mongo DB Connections
 await connectDb();
 
-app.use(cors());
+app.use(cors({
+  origin:"https://a5ecdbce.offerlette-decoder.pages.dev/"
+}));
 app.use(express.json());
 
 // Routes
