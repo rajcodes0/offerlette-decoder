@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import Analysis from "../models/analysis.js";
-import extracttext from "../utils/pdfExtract.js";
+import extractText from "../utils/pdfExtract.js";
 import analyzewithGemini from "../utils/gemini.js";
 
 const router = express.Router();
