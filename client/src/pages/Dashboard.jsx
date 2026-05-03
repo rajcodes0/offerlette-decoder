@@ -344,11 +344,13 @@ export default function Dashboard() {
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
               Unlock advanced jurisdictional cross-referencing.
             </div>
-            <button className="btn" style={{
+            <button className="btn"
+            onClick= {() => navigate('/checkout')}
+            style={{
               width: '100%', background: 'var(--text-primary)', color: 'var(--bg-primary)',
               fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '10px',
-              onClick: () => navigate('/checkout'),
+              
             }}>
               Upgrade Tier
             </button>

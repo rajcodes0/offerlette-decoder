@@ -1,5 +1,13 @@
 import axios from "axios";
 
+
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL,
+  withCredentials: true,
+  timeout: 60000,
+});
+
+
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("lex_token");
 
@@ -9,12 +17,6 @@ api.interceptors.request.use((config) => {
 
   return config;
 });
-const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
-  withCredentials: true,
-  timeout: 60000,
-});
-
 // Response interceptor for error handling
 api.interceptors.response.use(
   (res) => res,
