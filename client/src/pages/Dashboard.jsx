@@ -9,6 +9,7 @@ import HistoryItem from '../components/History/HistoryItem'
 import DeleteConfirmModal from '../components/UI/DeleteConfirmModal'
 import Navbar from '../components/Layout/Navbar'
 import Footer from '../components/Layout/Footer'
+import checkout from './Checkout'
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -347,6 +348,7 @@ export default function Dashboard() {
               width: '100%', background: 'var(--text-primary)', color: 'var(--bg-primary)',
               fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '10px',
+              onClick: () => navigate('/checkout'),
             }}>
               Upgrade Tier
             </button>
