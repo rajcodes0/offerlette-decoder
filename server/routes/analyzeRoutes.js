@@ -8,7 +8,7 @@ const router = express.Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { filesize: 5 * 1024 * 1024 },
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
 router.post("/analyze", upload.single("pdf"), async (req, res) => {
@@ -47,7 +47,8 @@ router.post("/analyze", upload.single("pdf"), async (req, res) => {
       result: analysisResult,
     });
   } catch (error) {
-    console.error("Gemini error:", error);
+    console.error("FULL ERROR:", error.message);
+    console.error(error.stack);
     if (error.status === 503) {
       return res.status(503).json({
         error:
@@ -60,6 +61,9 @@ router.post("/analyze", upload.single("pdf"), async (req, res) => {
 
 // get all analysis
 router.get("/analyze", async (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
   try {
     const analyses = await Analysis.find({ userId: req.user._id }).sort({
       createdAt: -1,

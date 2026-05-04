@@ -23,7 +23,11 @@ async function extractText(buffer) {
                   for (const run of textItem.R) {
                     if (run.T) {
                       // Decode URI-encoded text
-                      fullText += decodeURIComponent(run.T) + " ";
+                      try {
+                        fullText += decodeURIComponent(run.T) + " ";
+                      } catch {
+                        fullText += run.T + " ";
+                      }
                     }
                   }
                 }
