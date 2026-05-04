@@ -31,10 +31,10 @@ export default function Checkout() {
       setLoading(true);
       setError("");
 
-      // Create order on backend
+      // Create order on backend - amount is 100 INR (~1 USD)
       const response = await paymentAPI.createOrder(
-        1,
-        "Premium Access - 1 USD",
+        100,
+        "Premium Access - Offer Letter Decoder",
       );
       const { order, keyId } = response.data;
       setOrderId(order.id);
@@ -44,21 +44,25 @@ export default function Checkout() {
         throw new Error("Razorpay script failed to load");
       }
 
+      const userEmail = localStorage.getItem("lex_user")
+        ? JSON.parse(localStorage.getItem("lex_user")).email
+        : "";
+
       const options = {
         key: keyId,
         amount: order.amount,
         currency: order.currency,
         name: "OfferLette Decoder",
-        description: "Premium Access - 1 USD",
+        description: "Premium Access - Unlimited Analysis",
         order_id: order.id,
         handler: async (response) => {
           await handlePaymentSuccess(response, order.id);
         },
         prefill: {
-          email: localStorage.getItem("lex_user")?.email || "",
+          email: userEmail || "",
         },
         theme: {
-          color: "#3b82f6",
+          color: "#6c63ff",
         },
         modal: {
           ondismiss: () => {

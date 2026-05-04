@@ -18,17 +18,35 @@ router.post("/analyze", upload.single("pdf"), async (req, res) => {
 
     if (req.file) {
       inputType = "pdf";
+      console.log("PDF file received, size:", req.file.size);
       rawText = await extractText(req.file.buffer);
-      console.log("pdf uploaded ,text extracted");
+      console.log("PDF text extracted, length:", rawText.length);
+
+      if (!rawText || rawText.trim().length === 0) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Could not extract text from PDF. Please ensure it's a valid PDF file.",
+          });
+      }
     } else if (req.body.text) {
       inputType = "text";
-      rawText = req.body.text;
-      console.log("Text pasted");
+      rawText = req.body.text.trim();
+      console.log("Raw text received, length:", rawText.length);
+
+      if (rawText.length === 0) {
+        return res
+          .status(400)
+          .json({ error: "Please provide some text to analyze" });
+      }
     } else {
-      return res.status(400).json({ error: "please upload or paste a text" });
+      return res
+        .status(400)
+        .json({ error: "Please upload a PDF or paste text" });
     }
 
-    console.log("sending to gemini for analysis");
+    console.log("Sending to Gemini for analysis");
 
     const analysisResult = await analyzeWithGemini(rawText);
 
@@ -40,22 +58,41 @@ router.post("/analyze", upload.single("pdf"), async (req, res) => {
     });
 
     await analysis.save();
-    console.log("Analyze saved with ID", analysis._id);
+    console.log("Analysis saved with ID", analysis._id);
 
     res.json({
       id: analysis._id,
       result: analysisResult,
     });
   } catch (error) {
-    console.error("FULL ERROR:", error.message);
-    console.error(error.stack);
-    if (error.status === 503) {
+    console.error("Analysis error:", {
+      message: error.message,
+      type: error.constructor.name,
+      stack: error.stack,
+    });
+
+    // Handle specific error types
+    if (error.message.includes("RESOURCE_EXHAUSTED")) {
       return res.status(503).json({
         error:
           "AI service is currently busy. Please try again in a few moments.",
       });
     }
-    res.status(500).json({ error: "Analysis failed" });
+    if (error.message.includes("PDF") || error.message.includes("extract")) {
+      return res.status(400).json({
+        error:
+          "Could not extract text from PDF. Please try uploading a different file or use the text input.",
+      });
+    }
+    if (error.message.includes("API")) {
+      return res.status(500).json({
+        error: "AI service temporarily unavailable. Please try again soon.",
+      });
+    }
+
+    res.status(500).json({
+      error: error.message || "Analysis failed. Please try again.",
+    });
   }
 });
 
