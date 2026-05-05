@@ -53,6 +53,23 @@ router.post("/forgot-password", async (req, res) => {
     console.log("Reset URL:", resetUrl);
     console.log("Using EMAIL_FROM:", process.env.EMAIL_FROM);
 
+    // If email credentials are not configured, fallback to dev behavior (log URL)
+    if (
+      !process.env.EMAIL_USER ||
+      !process.env.EMAIL_PASS ||
+      !process.env.EMAIL_FROM
+    ) {
+      console.warn(
+        "Email config missing — printed reset URL to server console for development",
+      );
+      return res.json({
+        success: true,
+        message:
+          "Reset link created (email not configured). Check server logs for the link.",
+        resetUrl,
+      });
+    }
+
     await transporter.sendMail({
       from: process.env.EMAIL_FROM,
       to: user.email,

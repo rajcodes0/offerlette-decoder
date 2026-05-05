@@ -1,13 +1,25 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
 
+// Ensure Razorpay keys are present before creating the client
+if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+  console.warn(
+    "Razorpay keys missing: RAZORPAY_KEY_ID or RAZORPAY_KEY_SECRET not set",
+  );
+}
+
 const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
+  key_id: process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
 });
 
 export const createOrder = async (req, res) => {
   try {
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res
+        .status(500)
+        .json({ error: "Payment provider not configured on server" });
+    }
     const {
       amount = 100,
       currency = "USD",
@@ -48,6 +60,11 @@ export const createOrder = async (req, res) => {
 
 export const verifyPayment = async (req, res) => {
   try {
+    if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+      return res
+        .status(500)
+        .json({ error: "Payment provider not configured on server" });
+    }
     const { orderId, paymentId, signature } = req.body;
 
     // Verify signature

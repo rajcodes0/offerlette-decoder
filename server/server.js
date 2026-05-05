@@ -11,13 +11,27 @@ dotenv.config();
 
 const app = express();
 
+// Configure CORS to allow the deployed client and local dev origins
+const allowedOrigins = [
+  process.env.CLIENT_URL || "https://a5ecdbce.offerlette-decoder.pages.dev",
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+];
+
 app.use(
   cors({
-    origin: "https://a5ecdbce.offerlette-decoder.pages.dev",
+    origin: function (origin, callback) {
+      // allow requests with no origin (like mobile apps or curl)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.indexOf(origin) !== -1) {
+        return callback(null, true);
+      }
+      return callback(new Error("CORS policy: Origin not allowed"));
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-  })
+  }),
 );
 
 app.use(express.json());

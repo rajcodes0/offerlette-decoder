@@ -29,52 +29,53 @@ export const registerUser = async (req, res) => {
       },
     });
   } catch (error) {
-if(error.name === "validationError"){
-    const errors = Object.values(error.errors).map(err =>err.message);
-    return res.status(400).json({
-        success:false,
-        errors:errors
+    if (error.name === "ValidationError") {
+      const errors = Object.values(error.errors).map((err) => err.message);
+      return res.status(400).json({
+        success: false,
+        errors: errors,
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "server error",
+      error: error.message,
     });
-}
-res.status(500).json({
-    success:false,
-    message:"server error",
-    error:error.message
-})
   }
 };
 
-export const loginUser = async(req,res)=>{
+export const loginUser = async (req, res) => {
   try {
-    const {email,password} = req.body;
-  if (!email || !password) {
-      return res.status(400).json({message:'please provide email and pasword'})
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ message: "please provide email and pasword" });
     }
 
-    const user = await User.findOne({email});
-    if(!user){
-      return res.status(401).json({message:'Invalid email and password '})
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid email and password " });
     }
 
-    const isMatch = await user.comparePassword(password)
-    if(!isMatch){
-      return res.status(401).json({message:"inavalid email or password "})
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "inavalid email or password " });
     }
 
-    const token  = generateToken(user._id);
+    const token = generateToken(user._id);
 
-  res.json({
+    res.json({
       success: true,
       token,
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
-      }
+        email: user.email,
+      },
     });
   } catch (error) {
-    console.log('login failed',error)
-    res.status(500).json({message:'server error'})
+    console.log("login failed", error);
+    res.status(500).json({ message: "server error" });
   }
-}
-
+};
