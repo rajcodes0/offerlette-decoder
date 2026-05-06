@@ -119,7 +119,8 @@ export default function AnalysisDetail() {
               fontSize: 12, color: 'var(--text-muted)',
               maxHeight: 50, overflow: 'hidden',
             }}>
-              {analysis.rawText.slice(0, 200)}…
+              {analysis.rawText.slice(0, 200)}
+              {analysis.rawText.length > 200 && '…'}
             </div>
           )}
         </div>
