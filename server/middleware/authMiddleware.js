@@ -1,33 +1,32 @@
-import jwt from "jsonwebtoken";
-import User from '../models/user.js'
+import User from "../models/user.js";
 import { verifytoken } from "../utils/jwt.js";
 
+export const authProtect = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
 
-export const authProtect = async (req,res,next) =>{
-   console.log('Authorization header:', req.headers.authorization);
-  
-  let token;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    token = authHeader.substring(7); // removes 'Bearer ' (7 chars)
-    console.log('✅ Token extracted (length):', token.length);
-  } else {
-    console.log('❌ Header missing or invalid format');
-  }
-    if(!token){
-        return res.status(401).json({
-            message:"token not found"
-        })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ message: "No token provided" });
     }
 
+    const token = authHeader.substring(7); // strip 'Bearer '
+
+    // ✅ FIXED: verifytoken can return null — check before using
     const decoded = verifytoken(token);
-    if(!decoded){
-        return res.status(401).json({message:"Not authorized,invalid token"})
+    if (!decoded) {
+      return res.status(401).json({ message: "Invalid or expired token" });
     }
-const user  = await User.findById(decoded.userId).select('-password')
-if(!user){
-    return res.status(401).json({message:'user not found'});
-}
-req.user = user;
-next();
-}
+
+    // ✅ FIXED: Wrapped DB call in try/catch — malformed ID or DB outage no longer crashes server
+    const user = await User.findById(decoded.userId).select("-password");
+    if (!user) {
+      return res.status(401).json({ message: "User not found" });
+    }
+
+    req.user = user;
+    next();
+  } catch (error) {
+    console.error("Auth middleware error:", error.message);
+    return res.status(401).json({ message: "Authentication failed" });
+  }
+};

@@ -1,56 +1,84 @@
 // server/utils/pdfExtract.js
-import PDFParser from "pdf2json";
+// ✅ FIXED: Switched from pdf2json to pdfjs-dist (Mozilla PDF.js)
+// pdf2json garbles text on most real-world PDFs; pdfjs-dist is battle-tested and handles
+// complex layouts, unicode, and multi-column text correctly.
+//
+// Install: npm install pdfjs-dist
 
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+
+// Disable the worker for Node.js environment
+pdfjsLib.GlobalWorkerOptions.workerSrc = "";
+
+/**
+ * Extracts plain text from a PDF buffer.
+ * @param {Buffer} buffer - Raw PDF file buffer
+ * @returns {Promise<string>} Extracted text
+ */
 async function extractText(buffer) {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
+  try {
+    // Convert Node Buffer to Uint8Array (required by pdfjs-dist)
+    const uint8Array = new Uint8Array(buffer);
 
-    pdfParser.on("pdfParser_dataError", (errData) => {
-      console.error("PDF parsing error:", errData);
-      reject(new Error(`Failed to parse PDF: ${errData.parserError}`));
+    const loadingTask = pdfjsLib.getDocument({
+      data: uint8Array,
+      // Disable font loading — not needed for text extraction
+      disableFontFace: true,
+      // Ignore encryption errors for basic PDFs
+      ignoreErrors: true,
     });
 
-    pdfParser.on("pdfParser_dataReady", (pdfData) => {
-      try {
-        let fullText = "";
+    const pdfDocument = await loadingTask.promise;
+    const numPages = pdfDocument.numPages;
+    console.log(`PDF loaded: ${numPages} page(s)`);
 
-        // Extract text from all pages
-        if (pdfData.Pages) {
-          for (const page of pdfData.Pages) {
-            if (page.Texts) {
-              for (const textItem of page.Texts) {
-                if (textItem.R) {
-                  for (const run of textItem.R) {
-                    if (run.T) {
-                      // Decode URI-encoded text
-                      try {
-                        fullText += decodeURIComponent(run.T) + " ";
-                      } catch {
-                        fullText += run.T + " ";
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
+    const pageTexts = [];
+
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const textContent = await page.getTextContent();
+
+      // textContent.items is an array of text chunks with position data
+      // Sort by Y position (top to bottom), then X (left to right) for reading order
+      const items = textContent.items
+        .filter((item) => item.str && item.str.trim().length > 0)
+        .sort((a, b) => {
+          const yDiff = b.transform[5] - a.transform[5]; // Y axis (PDF coords are bottom-up)
+          if (Math.abs(yDiff) > 5) return yDiff; // Different lines
+          return a.transform[4] - b.transform[4]; // Same line — sort left to right
+        });
+
+      // Join with spaces, add newlines between lines
+      let pageText = "";
+      let lastY = null;
+
+      for (const item of items) {
+        const currentY = item.transform[5];
+        if (lastY !== null && Math.abs(currentY - lastY) > 5) {
+          pageText += "\n"; // New line when Y position changes significantly
         }
-
-        // Cleanup text
-        let text = fullText.replace(/\s+/g, " ");
-        text = text.replace(/\bPage \d+ of \d+\b/gi, "");
-        text = text.replace(/\b\d+\s*\/\s*\d+\b/g, "");
-        text = text.trim();
-
-        resolve(text);
-      } catch (error) {
-        reject(error);
+        pageText += item.str + " ";
+        lastY = currentY;
       }
-    });
 
-    // Parse the buffer
-    pdfParser.parseBuffer(buffer);
-  });
+      pageTexts.push(pageText.trim());
+    }
+
+    // Join all pages with double newline separator
+    let fullText = pageTexts.join("\n\n");
+
+    // Cleanup: collapse excess whitespace but preserve paragraph breaks
+    fullText = fullText
+      .replace(/ +/g, " ")             // multiple spaces → single space
+      .replace(/\n{3,}/g, "\n\n")      // 3+ newlines → 2
+      .replace(/\bPage \d+ of \d+\b/gi, "") // remove page numbers
+      .trim();
+
+    return fullText;
+  } catch (error) {
+    console.error("PDF extraction error:", error.message);
+    throw new Error(`Failed to extract text from PDF: ${error.message}`);
+  }
 }
 
 export default extractText;

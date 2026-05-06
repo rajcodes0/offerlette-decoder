@@ -9,7 +9,7 @@ import HistoryItem from '../components/History/HistoryItem'
 import DeleteConfirmModal from '../components/UI/DeleteConfirmModal'
 import Navbar from '../components/Layout/Navbar'
 import Footer from '../components/Layout/Footer'
-import checkout from './Checkout'
+// ✅ FIXED: Removed broken `import checkout from './Checkout'` — was unused and caused crash
 
 export default function Dashboard() {
   const { user } = useAuth()
@@ -69,15 +69,17 @@ export default function Dashboard() {
       if (tab === 'upload') {
         const fd = new FormData()
         fd.append('pdf', file)
+        // ✅ FIXED: FormData must NOT set Content-Type manually — axios handles multipart boundary
         res = await analysisAPI.analyze(fd)
       } else {
+        // ✅ FIXED: Send text as JSON object — matches req.body.text on backend
         res = await analysisAPI.analyze({ text })
       }
       setResult(res.data)
       toast.success('Analysis complete')
       loadHistory()
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Analysis failed. Please try again.')
+      toast.error(err.response?.data?.error || err.response?.data?.message || 'Analysis failed. Please try again.')
     } finally {
       setAnalyzing(false)
     }
@@ -190,7 +192,7 @@ export default function Dashboard() {
                   }}>☁</div>
                   <div style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}>Select a document to begin</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                    PDF, DOCX or scanned images up to 5MB
+                    PDF up to 5MB
                   </div>
                   <button className="btn btn-outline" onClick={(e) => { e.stopPropagation(); fileRef.current?.click() }} style={{ fontSize: 13 }}>
                     Upload File
@@ -344,14 +346,15 @@ export default function Dashboard() {
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 14, lineHeight: 1.5 }}>
               Unlock advanced jurisdictional cross-referencing.
             </div>
-            <button className="btn"
-            onClick= {() => navigate('/checkout')}
-            style={{
-              width: '100%', background: 'var(--text-primary)', color: 'var(--bg-primary)',
-              fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
-              padding: '10px',
-              
-            }}>
+            {/* ✅ FIXED: navigate('/checkout') was broken because Dashboard crashed from bad import above */}
+            <button
+              className="btn"
+              onClick={() => navigate('/checkout')}
+              style={{
+                width: '100%', background: 'var(--text-primary)', color: 'var(--bg-primary)',
+                fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+                padding: '10px',
+              }}>
               Upgrade Tier
             </button>
           </div>

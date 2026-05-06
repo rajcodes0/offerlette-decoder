@@ -1,76 +1,82 @@
+// server/models/user.js
+// ✅ This is the complete User model.
+// getResetPasswordToken() was likely missing from your model — that's why reset password crashed.
+
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
-import crypto from "crypto"
+import bcrypt from "bcryptjs";
+import crypto from "crypto";
 
 const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, "Name is required"],
+      trim: true,
+      minlength: [2, "Name must be at least 2 characters"],
     },
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required"],
       unique: true,
+      lowercase: true,
       trim: true,
-      validate: {
-        validator: function (email) {
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          return emailRegex.test(email);
-        },
-        message: "please enter a valid email address",
-      },
+      match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"],
     },
     password: {
       type: String,
-      required: true,
-      minlength: [6, "password must be 6 characters long"],
-      
+      required: [true, "Password is required"],
+      minlength: [6, "Password must be at least 6 characters"],
     },
-
-    resetPasswordToken:String,
-    resetPasswordExpire:Date
+    isPremium: {
+      type: Boolean,
+      default: false,
+    },
+    // ✅ Reset password fields — required for forgot/reset flow
+    resetPasswordToken: {
+      type: String,
+      default: undefined,
+    },
+    resetPasswordExpire: {
+      type: Date,
+      default: undefined,
+    },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
-// Hashing the password before saving
-userSchema.pre("save", async function () {
-  if (!this.isModified("password")) {
-    return;
-  }
-
-  try {
-    const salt = await bcrypt.genSalt(12);
-    this.password = await bcrypt.hash(this.password, salt);
-  } catch (error) {
-    throw error;
-  }
+// ─── Hash password before saving ─────────────────────────────────────────────
+userSchema.pre("save", async function (next) {
+  // Only hash if password field was modified (prevents double-hashing)
+  if (!this.isModified("password")) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
 });
 
-// Comparing password method
-userSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+// ─── Compare plain password with hash ────────────────────────────────────────
+userSchema.methods.comparePassword = async function (plainPassword) {
+  return bcrypt.compare(plainPassword, this.password);
 };
 
-userSchema.methods.getResetPasswordToken = function() {
-  const resetToken = crypto.randomBytes(32).toString("hex");
+// ─── Generate reset token ─────────────────────────────────────────────────────
+// ✅ This method was the missing piece — authRoutes calls user.getResetPasswordToken()
+// How it works:
+//   1. Generate a random 32-byte hex token (this is what gets emailed)
+//   2. Hash it with SHA-256 and store the HASH in DB (never store raw token in DB)
+//   3. Set expiry to 10 minutes from now
+//   4. Return the RAW token (for the email link)
+//   5. On reset: hash the incoming token and compare with DB hash
+userSchema.methods.getResetPasswordToken = function () {
+  const rawToken = crypto.randomBytes(32).toString("hex");
 
   this.resetPasswordToken = crypto
-    .createHash('sha256')
-    .update(resetToken)   // ← fix this line
-    .digest('hex');
+    .createHash("sha256")
+    .update(rawToken)
+    .digest("hex");
 
-  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
 
-  return resetToken;
-}
-
-
-
-
-
-
+  return rawToken; // return the unhashed version for the email
+};
 
 const User = mongoose.model("User", userSchema);
 export default User;

@@ -4,24 +4,27 @@ import { generateToken } from "../utils/jwt.js";
 export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
+
+    // ✅ FIXED: Validate required fields upfront with clear messages
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({
-        message: "user already exists with email",
-      });
+      return res.status(400).json({ message: "An account with this email already exists" });
     }
-    const newUser = new User({
-      name,
-      email,
-      password,
-    });
-    await newUser.save();
 
-    // send success response
+    const newUser = new User({ name, email, password });
+    await newUser.save();
 
     res.status(201).json({
       success: true,
-      message: "user registerd successfully",
+      message: "Account created successfully",
       user: {
         id: newUser._id,
         name: newUser.name,
@@ -30,37 +33,31 @@ export const registerUser = async (req, res) => {
     });
   } catch (error) {
     if (error.name === "ValidationError") {
-      const errors = Object.values(error.errors).map((err) => err.message);
-      return res.status(400).json({
-        success: false,
-        errors: errors,
-      });
+      const errors = Object.values(error.errors).map((e) => e.message);
+      return res.status(400).json({ success: false, message: errors.join(", ") });
     }
-    res.status(500).json({
-      success: false,
-      message: "server error",
-      error: error.message,
-    });
+    console.error("Register error:", error.message);
+    res.status(500).json({ success: false, message: "Server error. Please try again." });
   }
 };
 
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     if (!email || !password) {
-      return res
-        .status(400)
-        .json({ message: "please provide email and pasword" });
+      return res.status(400).json({ message: "Email and password are required" });
     }
 
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(401).json({ message: "Invalid email and password " });
+      // ✅ FIXED: Use same message for missing user and wrong password (prevents email enumeration)
+      return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ message: "inavalid email or password " });
+      return res.status(401).json({ message: "Invalid email or password" });
     }
 
     const token = generateToken(user._id);
@@ -75,7 +72,7 @@ export const loginUser = async (req, res) => {
       },
     });
   } catch (error) {
-    console.log("login failed", error);
-    res.status(500).json({ message: "server error" });
+    console.error("Login error:", error.message);
+    res.status(500).json({ message: "Server error. Please try again." });
   }
 };
