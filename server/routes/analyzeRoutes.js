@@ -36,6 +36,10 @@ const optionalAuth = async (req, res, next) => {
 
 // ─── POST /api/analyze – guests + authenticated users ────────────────────────
 router.post("/analyze", optionalAuth, upload.single("pdf"), async (req, res) => {
+  console.log("=== /api/analyze POST ===");
+  console.log("req.file:", req.file);
+  console.log("req.body:", req.body);
+  console.log("Content-Type:", req.headers['content-type']);
   try {
     let rawText;
     let inputType;

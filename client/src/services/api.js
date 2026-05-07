@@ -1,22 +1,28 @@
 import axios from "axios";
 
-
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   timeout: 60000,
+  headers: { 'Content-Type': 'application/json' } // default for JSON
 });
-
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("lex_token");
-
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-
+  
+  // CRITICAL: If data is FormData, remove the forced Content-Type
+  // so that the browser sets the correct multipart boundary
+  if (config.data instanceof FormData) {
+    delete config.headers['Content-Type'];
+  }
+  
   return config;
 });
+
+// rest of your interceptors and exports unchanged
 // Response interceptor for error handling
 api.interceptors.response.use(
   (res) => res,
