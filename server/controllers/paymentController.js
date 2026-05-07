@@ -1,5 +1,6 @@
 import Razorpay from "razorpay";
 import crypto from "crypto";
+import User from "../models/user.js"; // ✅ static import — no more dynamic import inside handler
 
 if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
   console.warn("⚠️  Razorpay keys missing — payment features will not work");
@@ -19,13 +20,16 @@ export const createOrder = async (req, res) => {
     }
 
     const {
-      amount = 100,          // Amount in INR (frontend sends 100 = ₹100)
+      amount = 100,
       description = "Premium Access - OfferLetter Decoder",
     } = req.body;
 
-    // ✅ FIXED: amount from frontend is already in INR (e.g. 100 = ₹100)
-    // Razorpay requires amount in paise (smallest unit), so multiply by 100
-    const amountInPaise = Math.round(amount * 100); // 100 INR → 10000 paise
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: "Invalid payment amount" });
+    }
+
+    // Frontend sends INR value (e.g. 100 = ₹100). Razorpay needs paise.
+    const amountInPaise = Math.round(Number(amount) * 100);
 
     const order = await razorpay.orders.create({
       amount: amountInPaise,
@@ -42,7 +46,7 @@ export const createOrder = async (req, res) => {
       success: true,
       order: {
         id: order.id,
-        amount: order.amount,   // in paise — Razorpay checkout uses this directly
+        amount: order.amount, // in paise — Razorpay checkout uses this directly
         currency: order.currency,
       },
       keyId: process.env.RAZORPAY_KEY_ID,
@@ -67,7 +71,7 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: "Missing payment verification fields" });
     }
 
-    // ✅ Verify HMAC signature — this is what proves the payment is genuine
+    // Verify HMAC signature — proves the payment is genuine and not tampered
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
       .update(`${orderId}|${paymentId}`)
@@ -78,23 +82,23 @@ export const verifyPayment = async (req, res) => {
       return res.status(400).json({ error: "Payment signature verification failed" });
     }
 
-    // Confirm payment status directly with Razorpay
+    // Confirm with Razorpay that the payment was actually captured
     const payment = await razorpay.payments.fetch(paymentId);
 
     if (payment.status !== "captured") {
-      return res.status(400).json({ error: `Payment not captured (status: ${payment.status})` });
+      return res
+        .status(400)
+        .json({ error: `Payment not captured (status: ${payment.status})` });
     }
 
-    // ✅ FIXED: Actually mark the user as premium in DB after successful payment
-    // Add `isPremium: Boolean` field to your User model for this to work
+    // Mark user as premium in DB
     if (req.user) {
       try {
-        const User = (await import("../models/user.js")).default;
         await User.findByIdAndUpdate(req.user._id, { isPremium: true });
         console.log("User upgraded to premium:", req.user._id);
       } catch (dbErr) {
-        console.error("Failed to update premium status:", dbErr.message);
         // Don't fail the response — payment was real, log and handle separately
+        console.error("Failed to update premium status:", dbErr.message);
       }
     }
 

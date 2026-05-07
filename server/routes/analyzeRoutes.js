@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import Analysis from "../models/analysis.js";
 import extractText from "../utils/pdfExtract.js";
-import analyzeWithGroq from '../utils/groq.js';
+import analyzeWithGroq from "../utils/groq.js";
 import { authProtect } from "../middleware/authMiddleware.js";
 import { verifytoken } from "../utils/jwt.js";
 import User from "../models/user.js";
@@ -11,10 +11,13 @@ const router = express.Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
 });
 
-// Optional auth middleware – attaches req.user if valid token exists
+// Max characters for pasted text (prevents abuse / huge DB docs)
+const MAX_TEXT_LENGTH = 50_000;
+
+// ─── Optional auth – attaches req.user if a valid Bearer token is present ────
 const optionalAuth = async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
@@ -25,13 +28,13 @@ const optionalAuth = async (req, res, next) => {
       const user = await User.findById(decoded.userId).select("-password");
       if (user) req.user = user;
     }
-  } catch (err) {
-    // Invalid token – continue as guest
+  } catch {
+    // Invalid token — continue as guest
   }
   next();
 };
 
-// POST /api/analyze – works for guests and logged-in users
+// ─── POST /api/analyze – guests + authenticated users ────────────────────────
 router.post("/analyze", optionalAuth, upload.single("pdf"), async (req, res) => {
   try {
     let rawText;
@@ -39,13 +42,14 @@ router.post("/analyze", optionalAuth, upload.single("pdf"), async (req, res) => 
 
     if (req.file) {
       inputType = "pdf";
-      console.log("PDF file received, size:", req.file.size);
+      console.log("PDF received, size:", req.file.size);
       rawText = await extractText(req.file.buffer);
       console.log("PDF text extracted, length:", rawText?.length);
 
       if (!rawText || rawText.trim().length === 0) {
         return res.status(400).json({
-          error: "Could not extract text from PDF. Please ensure it's a text-based PDF (not scanned), or paste the text manually.",
+          error:
+            "Could not extract text from PDF. Please ensure it's a text-based PDF (not scanned), or paste the text manually.",
         });
       }
     } else if (req.body.text) {
@@ -55,6 +59,12 @@ router.post("/analyze", optionalAuth, upload.single("pdf"), async (req, res) => 
 
       if (rawText.length === 0) {
         return res.status(400).json({ error: "Please provide some text to analyze" });
+      }
+
+      if (rawText.length > MAX_TEXT_LENGTH) {
+        return res.status(400).json({
+          error: `Text is too long (${rawText.length} chars). Maximum allowed is ${MAX_TEXT_LENGTH} characters.`,
+        });
       }
     } else {
       return res.status(400).json({ error: "Please upload a PDF or paste text" });
@@ -66,38 +76,55 @@ router.post("/analyze", optionalAuth, upload.single("pdf"), async (req, res) => 
     const analysis = new Analysis({
       userId: req.user?._id || null,
       inputType,
-      rawText,
+      // Store at most 10 000 chars of raw text to keep documents lean
+      rawText: rawText.substring(0, 10_000),
       result: analysisResult,
     });
 
     await analysis.save();
-    console.log("Analysis saved with ID:", analysis._id);
+    console.log("Analysis saved, ID:", analysis._id);
 
     res.json({ id: analysis._id, result: analysisResult });
   } catch (error) {
     console.error("Analysis error:", error.message);
 
     if (error.message.includes("RESOURCE_EXHAUSTED")) {
-      return res.status(503).json({ error: "AI service is currently busy. Please try again in a few moments." });
+      return res
+        .status(503)
+        .json({ error: "AI service is currently busy. Please try again in a few moments." });
     }
-    if (error.message.includes("extract text from PDF") || error.message.includes("PDF")) {
-      return res.status(400).json({ error: "Could not extract text from PDF. Try pasting the text manually instead." });
+    if (
+      error.message.includes("extract text from PDF") ||
+      error.message.includes("PDF")
+    ) {
+      return res.status(400).json({
+        error: "Could not extract text from PDF. Try pasting the text manually instead.",
+      });
     }
-    if (error.message.includes("model not found") || error.message.includes("API key")) {
-      return res.status(500).json({ error: "AI service configuration error. Please contact support." });
+    if (
+      error.message.includes("model not found") ||
+      error.message.includes("API key")
+    ) {
+      return res
+        .status(500)
+        .json({ error: "AI service configuration error. Please contact support." });
     }
     if (error.message.includes("GROQ_API_KEY")) {
-      return res.status(500).json({ error: "Server configuration error: missing API key." });
+      return res
+        .status(500)
+        .json({ error: "Server configuration error: missing API key." });
     }
 
     res.status(500).json({ error: error.message || "Analysis failed. Please try again." });
   }
 });
 
-// GET /api/analyze – requires auth
+// ─── GET /api/analyze – requires auth ────────────────────────────────────────
 router.get("/analyze", authProtect, async (req, res) => {
   try {
-    const analyses = await Analysis.find({ userId: req.user._id }).sort({ createdAt: -1 });
+    const analyses = await Analysis.find({ userId: req.user._id })
+      .sort({ createdAt: -1 })
+      .select("-rawText"); // don't send potentially large rawText back
     res.json(analyses);
   } catch (error) {
     console.error("Fetch analyses error:", error);
@@ -105,7 +132,7 @@ router.get("/analyze", authProtect, async (req, res) => {
   }
 });
 
-// GET /api/analyze/:id – public (or auth optional)
+// ─── GET /api/analyze/:id – public ───────────────────────────────────────────
 router.get("/analyze/:id", async (req, res) => {
   try {
     const analysis = await Analysis.findById(req.params.id);
@@ -116,7 +143,7 @@ router.get("/analyze/:id", async (req, res) => {
   }
 });
 
-// DELETE /api/analyze/:id – requires auth
+// ─── DELETE /api/analyze/:id – requires auth ─────────────────────────────────
 router.delete("/analyze/:id", authProtect, async (req, res) => {
   try {
     const analysis = await Analysis.findOneAndDelete({
