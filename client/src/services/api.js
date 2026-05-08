@@ -4,7 +4,8 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   timeout: 60000,
-  headers: { 'Content-Type': 'application/json' } // default for JSON
+  // ✅ DO NOT set a default Content-Type here.
+  // Axios sets it correctly per-request. A global default breaks multipart uploads.
 });
 
 api.interceptors.request.use((config) => {
@@ -12,18 +13,16 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  
-  // CRITICAL: If data is FormData, remove the forced Content-Type
-  // so that the browser sets the correct multipart boundary
+
+  // If sending FormData, let the browser/axios set Content-Type automatically
+  // (it needs to include the multipart boundary, which only it knows)
   if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
+    delete config.headers["Content-Type"];
   }
-  
+
   return config;
 });
 
-// rest of your interceptors and exports unchanged
-// Response interceptor for error handling
 api.interceptors.response.use(
   (res) => res,
   (error) => {
@@ -33,7 +32,7 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
     return Promise.reject(error);
-  },
+  }
 );
 
 export const authAPI = {
@@ -45,8 +44,12 @@ export const authAPI = {
 };
 
 export const analysisAPI = {
-  analyze: (formData) => api.post("/api/analyze", formData),
-  getAll: () => api.get("/api/analyze"),
+  // ✅ explicitly pass multipart headers so axios doesn't override
+  analyze: (formData) =>
+    api.post("/api/analyze", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  getAll: () => api.get("/api/analyze"),        // ✅ was /api/analyses (404)
   getById: (id) => api.get(`/api/analyze/${id}`),
   delete: (id) => api.delete(`/api/analyze/${id}`),
 };
