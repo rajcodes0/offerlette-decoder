@@ -1,7 +1,7 @@
 import express from "express";
 import multer from "multer";
 import Analysis from "../models/analysis.js";
-import extractText from "../utils/fileExtract.js";
+import extractText from "../utils/pdfExtract.js";
 import analyzeWithGroq from "../utils/groq.js";
 import { authProtect } from "../middleware/authMiddleware.js";
 import { verifytoken } from "../utils/jwt.js";

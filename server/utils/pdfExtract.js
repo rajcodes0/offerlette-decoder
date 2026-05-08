@@ -1,6 +1,6 @@
 // utils/fileExtract.js
 // Uses file-parse (v2+) which works reliably in Node.js ESM without a worker thread
-import { fileParse } from "file-parse";
+import { fileParse } from "pdf-parse";
 
 /**
  * Extracts plain text from a file buffer.
