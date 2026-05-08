@@ -1,6 +1,6 @@
 // utils/fileExtract.js
 // Uses file-parse (v2+) which works reliably in Node.js ESM without a worker thread
-import { fileParse } from "pdf-parse";
+import { pdfParse } from "pdf-parse";
 
 /**
  * Extracts plain text from a file buffer.
@@ -16,7 +16,7 @@ async function extractText(buffer) {
     // fileParse accepts the same options object as filejs-dist getDocument()
     // Pass `data` as Uint8Array — this avoids any file path / worker issues
     const uint8Array = new Uint8Array(buffer);
-    const parser = new fileParse({ data: uint8Array });
+    const parser = new pdfParse({ data: uint8Array });
 
     const result = await parser.getText();
 
