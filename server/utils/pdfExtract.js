@@ -1,6 +1,6 @@
 // utils/fileExtract.js
 // Uses pdf-parse (the correct package for PDF extraction)
-import pdf from 'pdf-parse';
+import {pdf }from 'pdf-parse';
 
 /**
  * Extracts plain text from a file buffer.
