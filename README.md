@@ -12,20 +12,20 @@ OfferLetter Decoder helps users break down complex job offer letters into simple
 
 You can:
 
-* Upload a PDF or paste text
-* Get clause-by-clause explanations
-* Detect risky terms (non-compete, IP clauses, etc.)
-* Compare salary with market estimates
-* Generate a negotiation script instantly
+- Upload a file or paste text
+- Get clause-by-clause explanations
+- Detect risky terms (non-compete, IP clauses, etc.)
+- Compare salary with market estimates
+- Generate a negotiation script instantly
 
 ---
 
 ## ⚠️ Current Status
 
-* ✅ Frontend deployed on Cloudflare Pages
-* ✅ Core AI analysis working
-* ❌ Payments (**Razorpay not integrated yet**)
-* ❌ Auth + dashboard (in progress / optional)
+- ✅ Frontend deployed on Cloudflare Pages
+- ✅ Core AI analysis working
+- ❌ Payments (**Razorpay not integrated yet**)
+- ❌ Auth + dashboard (in progress / optional)
 
 ---
 
@@ -33,19 +33,19 @@ You can:
 
 ### Frontend
 
-* React (Vite)
-* Tailwind CSS
-* Zustand (state management)
+- React (Vite)
+- Tailwind CSS
+- Zustand (state management)
 
 ### Backend
 
-* Node.js + Express.js
-* MongoDB (Atlas)
-* pdf-parse (PDF extraction)
+- Node.js + Express.js
+- MongoDB (Atlas)
+- file-parse (file extraction)
 
 ### AI
 
-* Google Gemini API
+- Google Gemini API
 
 ---
 
@@ -68,24 +68,24 @@ API (Express)
 
 ### 🔍 AI Analysis
 
-* Clause extraction
-* Plain English explanations
-* Risk detection (green / yellow / red)
+- Clause extraction
+- Plain English explanations
+- Risk detection (green / yellow / red)
 
 ### 🚨 Red Flag Detection
 
-* Non-compete clauses
-* IP ownership traps
-* Probation risks
+- Non-compete clauses
+- IP ownership traps
+- Probation risks
 
 ### 💰 Salary Insights
 
-* AI-based market comparison
-* Offer evaluation
+- AI-based market comparison
+- Offer evaluation
 
 ### 🧾 Negotiation Script
 
-* Ready-to-use script generated automatically
+- Ready-to-use script generated automatically
 
 ---
 
@@ -176,18 +176,18 @@ GET  /api/analyses/:id
 
 Integration with Razorpay is planned for:
 
-* Paid analyses
-* Premium features (saved reports, higher limits)
+- Paid analyses
+- Premium features (saved reports, higher limits)
 
 ---
 
 ## ⚡ Roadmap
 
-* [ ] Razorpay integration
-* [ ] User authentication
-* [ ] Dashboard (saved analyses)
-* [ ] Better salary benchmarking (real datasets)
-* [ ] PDF export of results
+- [ ] Razorpay integration
+- [ ] User authentication
+- [ ] Dashboard (saved analyses)
+- [ ] Better salary benchmarking (real datasets)
+- [ ] file export of results
 
 ---
 
@@ -195,11 +195,11 @@ Integration with Razorpay is planned for:
 
 This project demonstrates:
 
-* Full-stack MERN architecture
-* AI prompt engineering with structured JSON
-* PDF processing pipeline
-* Rate limiting for API cost control
-* Real-world product thinking
+- Full-stack MERN architecture
+- AI prompt engineering with structured JSON
+- file processing pipeline
+- Rate limiting for API cost control
+- Real-world product thinking
 
 ---
 
@@ -219,9 +219,3 @@ This tool provides **AI-based insights**, not legal advice.
 
 Built by Raj
 Focused on becoming a top-tier full-stack developer.
-
-
-
-
-
-
