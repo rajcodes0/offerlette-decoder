@@ -58,33 +58,39 @@ export default function Dashboard() {
     }
   }
 
-  const handleAnalyze = async () => {
-    if (tab === 'upload' && !file) { toast.error('Please select a PDF file'); return }
-    if (tab === 'text' && !text.trim()) { toast.error('Please paste your offer letter text'); return }
+// Replace only the handleAnalyze function inside Dashboard.jsx
+// (everything else stays the same)
 
-    setAnalyzing(true)
-    setResult(null)
-    try {
-      let res
-      if (tab === 'upload') {
-        const fd = new FormData()
-        fd.append('pdf', file)
-        // ✅ FIXED: FormData must NOT set Content-Type manually — axios handles multipart boundary
-        res = await analysisAPI.analyze(fd)
-      } else {
-        // ✅ FIXED: Send text as JSON object — matches req.body.text on backend
-        res = await analysisAPI.analyze({ text })
-      }
-      setResult(res.data)
-      toast.success('Analysis complete')
-      loadHistory()
-    } catch (err) {
-      toast.error(err.response?.data?.error || err.response?.data?.message || 'Analysis failed. Please try again.')
-    } finally {
-      setAnalyzing(false)
+const handleAnalyze = async () => {
+  if (tab === 'upload' && !file) { toast.error('Please select a PDF file'); return }
+  if (tab === 'text' && !text.trim()) { toast.error('Please paste your offer letter text'); return }
+
+  setAnalyzing(true)
+  setResult(null)
+  try {
+    let res
+    if (tab === 'upload') {
+      // ✅ PDF: build FormData with key "pdf" (must match multer field name)
+      const fd = new FormData()
+      fd.append('pdf', file)
+      res = await analysisAPI.analyzePDF(fd)   // uses new analyzePDF method
+    } else {
+      // ✅ Text: send as plain JSON — NOT FormData
+      res = await analysisAPI.analyzeText(text) // uses new analyzeText method
     }
+    setResult(res.data)
+    toast.success('Analysis complete')
+    loadHistory()
+  } catch (err) {
+    toast.error(
+      err.response?.data?.error ||
+      err.response?.data?.message ||
+      'Analysis failed. Please try again.'
+    )
+  } finally {
+    setAnalyzing(false)
   }
-
+}
   const handleDelete = async (id) => {
     try {
       await analysisAPI.delete(id)
