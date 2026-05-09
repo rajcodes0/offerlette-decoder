@@ -13,7 +13,6 @@ import HistoryItem from "../components/History/HistoryItem";
 import DeleteConfirmModal from "../components/UI/DeleteConfirmModal";
 import Navbar from "../components/Layout/Navbar";
 import Footer from "../components/Layout/Footer";
-// ✅ FIXED: Removed broken `import checkout from './Checkout'` — was unused and caused crash
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -34,7 +33,7 @@ export default function Dashboard() {
       const res = await analysisAPI.getAll();
       setHistory(res.data);
     } catch {
-      // silently fail
+      // silently fail — user may not be logged in
     } finally {
       setHistoryLoading(false);
     }
@@ -44,38 +43,30 @@ export default function Dashboard() {
     loadHistory();
   }, [loadHistory]);
 
+  const validateFile = (f) => {
+    if (!f) return false;
+    if (f.type !== "application/pdf") {
+      toast.error("Only PDF files are supported");
+      return false;
+    }
+    if (f.size > 5 * 1024 * 1024) {
+      toast.error("PDF exceeds 5 MB limit");
+      return false;
+    }
+    return true;
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files[0];
-    if (f && f.type === "application/pdf") {
-      if (f.size > 5 * 1024 * 1024) {
-        toast.error("PDF exceeds 5MB limit");
-        return;
-      }
-      setFile(f);
-    } else {
-      toast.error("Only PDF files are supported");
-    }
+    if (f && validateFile(f)) setFile(f);
   };
 
   const handleFileSelect = (e) => {
     const f = e.target.files[0];
-    if (f) {
-      if (f.type !== "application/pdf") {
-        toast.error("Only PDF files are supported");
-        return;
-      }
-      if (f.size > 5 * 1024 * 1024) {
-        toast.error("PDF exceeds 5MB limit");
-        return;
-      }
-      setFile(f);
-    }
+    if (f && validateFile(f)) setFile(f);
   };
-
-  // Replace only the handleAnalyze function inside Dashboard.jsx
-  // (everything else stays the same)
 
   const handleAnalyze = async () => {
     if (tab === "upload" && !file) {
@@ -89,17 +80,17 @@ export default function Dashboard() {
 
     setAnalyzing(true);
     setResult(null);
+
     try {
       let res;
       if (tab === "upload") {
-        // ✅ file: build FormData with key "file" (must match multer field name)
-        const fd = new FormData();
-        fd.append("file", file);
-        res = await analysisAPI.analyzefile(fd); // uses new analyzefile method
+        // Pass the File object directly — api.js builds FormData internally
+        // with field name "offerFile" matching multer's upload.single("offerFile")
+        res = await analysisAPI.analyzefile(file);
       } else {
-        // ✅ Text: send as plain JSON — NOT FormData
-        res = await analysisAPI.analyzeText(text); // uses new analyzeText method
+        res = await analysisAPI.analyzeText(text);
       }
+
       setResult(res.data);
       toast.success("Analysis complete");
       loadHistory();
@@ -107,12 +98,13 @@ export default function Dashboard() {
       toast.error(
         err.response?.data?.error ||
           err.response?.data?.message ||
-          "Analysis failed. Please try again.",
+          "Analysis failed. Please try again."
       );
     } finally {
       setAnalyzing(false);
     }
   };
+
   const handleDelete = async (id) => {
     try {
       await analysisAPI.delete(id);
@@ -148,7 +140,7 @@ export default function Dashboard() {
           alignItems: "start",
         }}
       >
-        {/* Left: Upload + Result */}
+        {/* ── Left: Upload + Result ── */}
         <div>
           <div style={{ marginBottom: 28 }}>
             <div
@@ -209,6 +201,7 @@ export default function Dashboard() {
                     background: "var(--bg-card)",
                     cursor: "pointer",
                     fontWeight: 700,
+                    color: "var(--text-primary)",
                   }}
                 >
                   Upgrade
@@ -251,6 +244,7 @@ export default function Dashboard() {
                     tab === t.id
                       ? "1px solid var(--border-light)"
                       : "1px solid transparent",
+                  cursor: "pointer",
                   transition: "all 0.2s",
                 }}
               >
@@ -268,176 +262,101 @@ export default function Dashboard() {
                 setDragOver(true);
               }}
               onDragLeave={() => setDragOver(false)}
+              onClick={() => fileRef.current?.click()}
               style={{
-                border: `2px dashed ${dragOver ? "var(--accent)" : file ? "var(--risk-green)" : "var(--border-light)"}`,
+                border: `2px dashed ${dragOver ? "var(--accent-light)" : "var(--border)"}`,
                 borderRadius: "var(--radius-lg)",
-                background: dragOver
-                  ? "var(--accent-dim)"
-                  : file
-                    ? "var(--risk-green-bg)"
-                    : "var(--bg-card)",
                 padding: "48px 32px",
                 textAlign: "center",
-                transition: "all 0.2s",
                 cursor: "pointer",
+                background: dragOver ? "var(--accent-dim)" : "var(--bg-card)",
+                transition: "all 0.2s",
                 marginBottom: 16,
               }}
-              onClick={() => !file && fileRef.current?.click()}
             >
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,application/pdf"
+                accept="application/pdf"
                 style={{ display: "none" }}
                 onChange={handleFileSelect}
               />
               {file ? (
-                <>
-                  <div style={{ fontSize: 40, marginBottom: 12 }}>📄</div>
-                  <div
-                    style={{
-                      fontWeight: 600,
-                      fontSize: 15,
-                      marginBottom: 4,
-                      color: "var(--risk-green)",
-                    }}
-                  >
-                    {file.name}
-                  </div>
+                <div>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📄</div>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{file.name}</div>
                   <div
                     style={{
                       fontSize: 12,
                       color: "var(--text-muted)",
-                      marginBottom: 16,
+                      marginTop: 4,
                     }}
                   >
-                    {(file.size / 1024).toFixed(0)} KB · PDF Document
+                    {(file.size / 1024).toFixed(1)} KB ·{" "}
+                    <span
+                      style={{
+                        color: "var(--accent-light)",
+                        cursor: "pointer",
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setFile(null);
+                        if (fileRef.current) fileRef.current.value = "";
+                      }}
+                    >
+                      Remove
+                    </span>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setFile(null);
-                    }}
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      textDecoration: "underline",
-                    }}
-                  >
-                    Remove file
-                  </button>
-                </>
+                </div>
               ) : (
-                <>
-                  <div
-                    style={{
-                      width: 52,
-                      height: 52,
-                      borderRadius: 12,
-                      background: "var(--bg-secondary)",
-                      border: "1px solid var(--border)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      margin: "0 auto 16px",
-                      fontSize: 22,
-                    }}
-                  >
-                    ☁
+                <div>
+                  <div style={{ fontSize: 32, marginBottom: 10 }}>📂</div>
+                  <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>
+                    Drop your offer letter PDF here
                   </div>
-                  <div
-                    style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}
-                  >
-                    Select a PDF document to begin
+                  <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                    or click to browse · max 5 MB
                   </div>
-                  <div
-                    style={{
-                      fontSize: 12,
-                      color: "var(--text-muted)",
-                      marginBottom: 20,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    PDF up to 5MB
-                  </div>
-                  <button
-                    className="btn btn-outline"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      fileRef.current?.click();
-                    }}
-                    style={{ fontSize: 13 }}
-                  >
-                    Upload File
-                  </button>
-                </>
+                </div>
               )}
             </div>
           )}
 
-          {/* Text input */}
+          {/* Text zone */}
           {tab === "text" && (
-            <div style={{ marginBottom: 16, position: "relative" }}>
+            <div style={{ marginBottom: 16 }}>
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
-                placeholder="Paste your offer letter or legal text here..."
+                placeholder="Paste your offer letter text here..."
                 maxLength={50000}
                 style={{
                   width: "100%",
-                  minHeight: 260,
-                  resize: "vertical",
+                  minHeight: 240,
                   padding: "16px",
-                  background: "var(--bg-input)",
+                  background: "var(--bg-card)",
                   border: "1px solid var(--border)",
                   borderRadius: "var(--radius-lg)",
                   color: "var(--text-primary)",
-                  fontSize: 14,
+                  fontSize: 13,
                   lineHeight: 1.6,
+                  resize: "vertical",
                   fontFamily: "var(--font-body)",
-                  transition: "border-color 0.2s",
+                  outline: "none",
+                  boxSizing: "border-box",
                 }}
-                onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
-                onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
               />
               <div
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "8px 14px",
-                  marginTop: -2,
-                  background: "var(--bg-secondary)",
-                  border: "1px solid var(--border)",
-                  borderTop: "none",
-                  borderRadius: "0 0 var(--radius-lg) var(--radius-lg)",
+                  marginTop: 6,
+                  fontSize: 11,
+                  color: "var(--text-muted)",
                 }}
               >
-                <span
-                  style={{
-                    fontSize: 11,
-                    color: "var(--risk-green)",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4,
-                  }}
-                >
-                  <span
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: "50%",
-                      background: "var(--risk-green)",
-                      display: "inline-block",
-                    }}
-                  />
-                  Encryption Active
-                </span>
-                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                <span>Paste your full offer letter for best results</span>
+                <span>
                   {text.length.toLocaleString()} / 50,000 characters
                 </span>
               </div>
@@ -476,7 +395,7 @@ export default function Dashboard() {
             </button>
           </div>
 
-          {/* Analyzing overlay message */}
+          {/* Analyzing overlay */}
           {analyzing && (
             <div
               style={{
@@ -566,7 +485,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Right: History sidebar */}
+        {/* ── Right: History sidebar ── */}
         <div style={{ position: "sticky", top: 80 }}>
           <div
             style={{
@@ -653,7 +572,6 @@ export default function Dashboard() {
             >
               Unlock advanced jurisdictional cross-referencing.
             </div>
-            {/* ✅ FIXED: navigate('/checkout') was broken because Dashboard crashed from bad import above */}
             <button
               className="btn"
               onClick={() => navigate("/checkout")}
@@ -666,6 +584,7 @@ export default function Dashboard() {
                 letterSpacing: "0.06em",
                 textTransform: "uppercase",
                 padding: "10px",
+                cursor: "pointer",
               }}
             >
               Upgrade Tier

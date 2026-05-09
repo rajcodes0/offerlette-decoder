@@ -4,16 +4,18 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   timeout: 60000,
-  // No default Content-Type – let axios set it per request
+  // NOTE: Do NOT set a global Content-Type.
+  // axios sets it per-request. A global default breaks multipart uploads.
 });
 
+// ─── Request interceptor — attach auth token ──────────────────────────────────
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("lex_token");
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // If sending FormData, let the browser set multipart boundary
+  // For FormData, let the browser set Content-Type with the multipart boundary.
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
@@ -21,18 +23,25 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// ─── Response interceptor — handle 401 globally ───────────────────────────────
 api.interceptors.response.use(
   (res) => res,
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem("lex_token");
       localStorage.removeItem("lex_user");
-      window.location.href = "/login";
+      // Only redirect if not already on an auth page
+      const authPaths = ["/login", "/register", "/forgot-password", "/reset-password"];
+      const isAuthPage = authPaths.some((p) => window.location.pathname.startsWith(p));
+      if (!isAuthPage) {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
-  },
+  }
 );
 
+// ─── Auth API ─────────────────────────────────────────────────────────────────
 export const authAPI = {
   register: (data) => api.post("/api/auth/register", data),
   login: (data) => api.post("/api/auth/login", data),
@@ -41,38 +50,41 @@ export const authAPI = {
     api.post(`/api/auth/reset-password/${token}`, data),
 };
 
+// ─── Analysis API ─────────────────────────────────────────────────────────────
 export const analysisAPI = {
   /**
-   * Unified analysis endpoint (matches server's POST /api/analyze)
-   * Can accept either:
-   *   - FormData (file upload) – multipart/form-data
-   *   - { text: "..." } object – application/json
+   * Upload a PDF file for analysis.
+   * Field name MUST be "offerFile" — matches multer's upload.single("offerFile").
    */
-  analyze: (data) => {
-    // If data is FormData, let axios handle it (no extra headers)
-    if (data instanceof FormData) {
-      return api.post("/api/analyze", data);
-    }
-    // Otherwise assume it's { text: "..." }
-    return api.post("/api/analyze", data);
+  analyzefile: (file) => {
+    const formData = new FormData();
+    formData.append("offerFile", file);
+    return api.post("/api/analyze", formData);
   },
 
-  // Convenience method for file uploads (uses same unified endpoint)
-  analyzefile: (formData) => api.post("/api/analyze", formData),
-
-  // Convenience method for plain text (uses same unified endpoint)
+  /**
+   * Analyze raw pasted text.
+   */
   analyzeText: (text) => api.post("/api/analyze", { text }),
 
-  // Fetch all analyses for the logged-in user
-  getAll: () => api.get("/api/analyses"),   // ✅ matches your frontend's call
+  /**
+   * Get all analyses for the logged-in user.
+   * Route: GET /api/analyses (plural — see analyzeRoutes.js)
+   */
+  getAll: () => api.get("/api/analyses"),
 
-  // Fetch a single analysis by ID (public)
+  /**
+   * Get a single analysis by ID (public).
+   */
   getById: (id) => api.get(`/api/analyze/${id}`),
 
-  // Delete an analysis (requires auth)
+  /**
+   * Delete an analysis (auth required).
+   */
   delete: (id) => api.delete(`/api/analyze/${id}`),
 };
 
+// ─── Payment API ──────────────────────────────────────────────────────────────
 export const paymentAPI = {
   createOrder: (amount, description) =>
     api.post("/api/payment/create-order", { amount, description }),

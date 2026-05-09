@@ -5,12 +5,19 @@ import Navbar from "../components/Layout/Navbar";
 import Footer from "../components/Layout/Footer";
 
 export default function Landing() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   const navigate = useNavigate();
 
+  // Redirect to dashboard if already logged in.
+  // Wait for auth loading to finish first — avoids a flash redirect on page load.
   useEffect(() => {
-    if (user) navigate("/dashboard");
-  }, [user, navigate]);
+    if (!loading && user) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  // While auth state is loading, render nothing (or a tiny spinner)
+  if (loading) return null;
 
   return (
     <div className="page">
@@ -76,7 +83,7 @@ export default function Landing() {
           </p>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link
-              to={user ? "/dashboard" : "/register"}
+              to="/register"
               className="btn btn-primary"
               style={{ padding: "12px 28px", fontSize: 15 }}
             >
@@ -115,30 +122,9 @@ export default function Landing() {
               background: "var(--bg-secondary)",
             }}
           >
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: "#ff5f57",
-              }}
-            />
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: "#febc2e",
-              }}
-            />
-            <span
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: "50%",
-                background: "#28c840",
-              }}
-            />
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#ff5f57" }} />
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#febc2e" }} />
+            <span style={{ width: 10, height: 10, borderRadius: "50%", background: "#28c840" }} />
             <span
               style={{
                 marginLeft: "auto",
@@ -151,30 +137,11 @@ export default function Landing() {
               Analysis Mode: Active
             </span>
           </div>
-          <div
-            style={{
-              padding: 20,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-            }}
-          >
+          <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 10 }}>
             {[
-              {
-                label: "Non-compete clause found",
-                level: "HIGH RISK",
-                color: "var(--risk-red)",
-              },
-              {
-                label: "Equity vesting schedule",
-                level: "REVIEW",
-                color: "var(--risk-yellow)",
-              },
-              {
-                label: "IP assignment terms",
-                level: "FLAGGED",
-                color: "var(--risk-yellow)",
-              },
+              { label: "Non-compete clause found", level: "HIGH RISK", color: "var(--risk-red)" },
+              { label: "Equity vesting schedule", level: "REVIEW", color: "var(--risk-yellow)" },
+              { label: "IP assignment terms", level: "FLAGGED", color: "var(--risk-yellow)" },
             ].map((item, i) => (
               <div
                 key={i}
@@ -241,16 +208,11 @@ export default function Landing() {
               Structural Fidelity
             </div>
             <h2
-              style={{
-                fontFamily: "var(--font-display)",
-                fontSize: 32,
-                fontWeight: 700,
-              }}
+              style={{ fontFamily: "var(--font-display)", fontSize: 32, fontWeight: 700 }}
             >
               Architectural Grade Legal Intelligence
             </h2>
           </div>
-
           <div
             style={{
               display: "grid",
@@ -307,13 +269,7 @@ export default function Landing() {
                 >
                   {f.title}
                 </h3>
-                <p
-                  style={{
-                    fontSize: 13,
-                    color: "var(--text-secondary)",
-                    lineHeight: 1.6,
-                  }}
-                >
+                <p style={{ fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.6 }}>
                   {f.desc}
                 </p>
               </div>
@@ -336,7 +292,7 @@ export default function Landing() {
           Ready to define your own terms?
         </h2>
         <Link
-          to={user ? "/dashboard" : "/register"}
+          to="/register"
           className="btn btn-primary"
           style={{ padding: "14px 36px", fontSize: 16 }}
         >

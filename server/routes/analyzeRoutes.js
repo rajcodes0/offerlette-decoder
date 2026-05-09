@@ -9,19 +9,26 @@ import User from "../models/user.js";
 
 const router = express.Router();
 
+// ─── Multer config ────────────────────────────────────────────────────────────
+// "offerFile" must match exactly what the frontend sends in FormData.append("offerFile", ...)
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "application/pdf") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF files are allowed"), false);
+    }
+  },
 });
 
-// Max characters for pasted text (prevents abuse / huge DB docs)
 const MAX_TEXT_LENGTH = 50_000;
 
-// ─── Optional auth – attaches req.user if a valid Bearer token is present ────
-const optionalAuth = async (req, res, next) => {
+// ─── Optional auth ────────────────────────────────────────────────────────────
+const optionalAuth = async (req, _res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) return next();
-
   try {
     const decoded = verifytoken(authHeader.substring(7));
     if (decoded) {
@@ -29,99 +36,110 @@ const optionalAuth = async (req, res, next) => {
       if (user) req.user = user;
     }
   } catch {
-    // Invalid token — continue as guest
+    // invalid token — continue as guest
   }
   next();
 };
 
-// ─── POST /api/analyze/file – file uploads (guests + optional auth) ────────
+// ─── POST /api/analyze ────────────────────────────────────────────────────────
+// Unified endpoint: handles both file uploads and plain text.
+// File uploads: multipart/form-data with field name "offerFile"
+// Text:         application/json with body { text: "..." }
 router.post(
-  "/analyze/file",
+  "/analyze",
   optionalAuth,
-  upload.single("file"),
+  (req, res, next) => {
+    // Only run multer if the request is multipart (file upload).
+    // For JSON text requests, skip multer entirely.
+    const contentType = req.headers["content-type"] || "";
+    if (contentType.includes("multipart/form-data")) {
+      upload.single("offerFile")(req, res, (err) => {
+        if (err instanceof multer.MulterError) {
+          return res.status(400).json({ error: `Upload error: ${err.message}` });
+        }
+        if (err) {
+          return res.status(400).json({ error: err.message });
+        }
+        next();
+      });
+    } else {
+      next();
+    }
+  },
   async (req, res) => {
     try {
-      if (!req.file) {
-        return res.status(400).json({ error: "Please upload a file" });
-      }
+      // ── Case 1: File upload ─────────────────────────────────────────────────
+      if (req.file) {
+        const rawText = await extractText(req.file.buffer);
 
-      const rawText = await extractText(req.file.buffer);
-      if (!rawText || rawText.trim().length === 0) {
-        return res.status(400).json({
-          error:
-            "Could not extract text from file. Please ensure it's a text-based file (not scanned), or paste the text manually.",
+        if (!rawText || rawText.trim().length === 0) {
+          return res.status(400).json({
+            error:
+              "Could not extract text from the PDF. Make sure it is text-based (not scanned), or paste the text manually.",
+          });
+        }
+
+        const analysisResult = await analyzeWithGroq(rawText);
+
+        const analysis = new Analysis({
+          userId: req.user?._id || null,
+          inputType: "file",
+          rawText: rawText.substring(0, 10_000),
+          result: analysisResult,
         });
+        await analysis.save();
+
+        return res.json({ id: analysis._id, result: analysisResult });
       }
 
-      const analysisResult = await analyzeWithGroq(rawText);
+      // ── Case 2: Plain text ──────────────────────────────────────────────────
+      const { text } = req.body || {};
 
-      const analysis = new Analysis({
-        userId: req.user?._id || null,
-        inputType: "file",
-        rawText: rawText.substring(0, 10_000),
-        result: analysisResult,
+      if (text && typeof text === "string" && text.trim().length > 0) {
+        if (text.length > MAX_TEXT_LENGTH) {
+          return res.status(400).json({ error: "Text is too long (max 50,000 characters)" });
+        }
+
+        const rawText = text.trim();
+        const analysisResult = await analyzeWithGroq(rawText);
+
+        const analysis = new Analysis({
+          userId: req.user?._id || null,
+          inputType: "text",
+          rawText: rawText.substring(0, 10_000),
+          result: analysisResult,
+        });
+        await analysis.save();
+
+        return res.json({ id: analysis._id, result: analysisResult });
+      }
+
+      // ── Neither provided ────────────────────────────────────────────────────
+      return res.status(400).json({
+        error: "Please provide a PDF file or paste your offer letter text.",
       });
-
-      await analysis.save();
-      res.json({ id: analysis._id, result: analysisResult });
     } catch (error) {
-      console.error("File analysis error:", error.message);
+      console.error("Analysis error:", error.message);
       if (error.message.includes("RESOURCE_EXHAUSTED")) {
-        return res.status(503).json({ error: "AI service busy" });
+        return res.status(503).json({ error: "AI service is busy. Please try again in a moment." });
       }
       res.status(500).json({ error: error.message || "Analysis failed" });
     }
-  },
+  }
 );
 
-// ─── POST /api/analyze/text – raw text analysis (guests + optional auth) ───
-router.post("/analyze/text", optionalAuth, async (req, res) => {
+// ─── GET /api/analyses – auth required ───────────────────────────────────────
+// Returns truncated list for history/sidebar. Uses /api/analyses (plural).
+router.get("/analyses", authProtect, async (req, res) => {
   try {
-    const { text } = req.body || {};
-    if (!text || typeof text !== "string" || text.trim().length === 0) {
-      return res
-        .status(400)
-        .json({ error: "Please provide some text to analyze" });
-    }
+    const analyses = await Analysis.find({ userId: req.user._id }).sort({ createdAt: -1 });
 
-    if (text.length > MAX_TEXT_LENGTH) {
-      return res.status(400).json({ error: "Text is too long" });
-    }
-
-    const rawText = text.trim();
-    const analysisResult = await analyzeWithGroq(rawText);
-
-    const analysis = new Analysis({
-      userId: req.user?._id || null,
-      inputType: "text",
-      rawText: rawText.substring(0, 10_000),
-      result: analysisResult,
-    });
-
-    await analysis.save();
-    res.json({ id: analysis._id, result: analysisResult });
-  } catch (error) {
-    console.error("Text analysis error:", error.message);
-    if (error.message.includes("RESOURCE_EXHAUSTED")) {
-      return res.status(503).json({ error: "AI service busy" });
-    }
-    res.status(500).json({ error: error.message || "Analysis failed" });
-  }
-});
-
-// ─── GET /api/analyze – requires auth ────────────────────────────────────────
-router.get("/analyze", authProtect, async (req, res) => {
-  try {
-    const analyses = await Analysis.find({ userId: req.user._id }).sort({
-      createdAt: -1,
-    });
-
-    // Return a truncated preview of rawText to keep payload small for lists
     const limited = analyses.map((a) => {
       const obj = a.toObject();
       obj.rawText = (obj.rawText || "").substring(0, 300);
       return obj;
     });
+
     res.json(limited);
   } catch (error) {
     console.error("Fetch analyses error:", error);
@@ -136,11 +154,12 @@ router.get("/analyze/:id", async (req, res) => {
     if (!analysis) return res.status(404).json({ error: "Analysis not found" });
     res.json(analysis);
   } catch (error) {
+    console.error("Get analysis error:", error);
     res.status(500).json({ error: "Failed to fetch analysis" });
   }
 });
 
-// ─── DELETE /api/analyze/:id – requires auth ─────────────────────────────────
+// ─── DELETE /api/analyze/:id – auth required ─────────────────────────────────
 router.delete("/analyze/:id", authProtect, async (req, res) => {
   try {
     const analysis = await Analysis.findOneAndDelete({
