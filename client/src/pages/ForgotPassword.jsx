@@ -46,7 +46,7 @@ export default function ForgotPassword() {
                 <div style={{ fontSize: 48, marginBottom: 16 }}>📨</div>
                 <h3 style={{ fontFamily: 'var(--font-display)', fontSize: 20, marginBottom: 10 }}>Recovery Protocol Dispatched</h3>
                 <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 24 }}>
-                  Check your email for a password reset link. The link expires in 1 hour.
+                  Check your email for a password reset link. The link expires in 10 minutes.
                 </p>
                 <Link to="/login" className="btn btn-primary" style={{ fontSize: 14 }}>
                   Back to Authorization
