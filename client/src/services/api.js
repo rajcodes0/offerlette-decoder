@@ -4,8 +4,7 @@ const api = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
   withCredentials: true,
   timeout: 60000,
-  // ✅ DO NOT set a default Content-Type here.
-  // Axios sets it correctly per-request. A global default breaks multipart uploads.
+  // No default Content-Type – let axios set it per request
 });
 
 api.interceptors.request.use((config) => {
@@ -14,8 +13,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // If sending FormData, let the browser/axios set Content-Type automatically
-  // (it needs to include the multipart boundary, which only it knows)
+  // If sending FormData, let the browser set multipart boundary
   if (config.data instanceof FormData) {
     delete config.headers["Content-Type"];
   }
@@ -44,21 +42,34 @@ export const authAPI = {
 };
 
 export const analysisAPI = {
-  // File upload endpoint (matches server /api/analyze/file)
-  analyzefile: (formData) =>
-    api.post("/api/analyze/file", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    }),
+  /**
+   * Unified analysis endpoint (matches server's POST /api/analyze)
+   * Can accept either:
+   *   - FormData (file upload) – multipart/form-data
+   *   - { text: "..." } object – application/json
+   */
+  analyze: (data) => {
+    // If data is FormData, let axios handle it (no extra headers)
+    if (data instanceof FormData) {
+      return api.post("/api/analyze", data);
+    }
+    // Otherwise assume it's { text: "..." }
+    return api.post("/api/analyze", data);
+  },
 
-  // Raw text analysis endpoint (matches server /api/analyze/text)
-  analyzeText: (text) => api.post("/api/analyze/text", { text }),
-  // Backwards-compatible alias
-  analyze: (formData) =>
-    api.post("/api/analyze/file", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    }),
-  getAll: () => api.get("/api/analyze"), // ✅ was /api/analyses (404)
+  // Convenience method for file uploads (uses same unified endpoint)
+  analyzefile: (formData) => api.post("/api/analyze", formData),
+
+  // Convenience method for plain text (uses same unified endpoint)
+  analyzeText: (text) => api.post("/api/analyze", { text }),
+
+  // Fetch all analyses for the logged-in user
+  getAll: () => api.get("/api/analyses"),   // ✅ matches your frontend's call
+
+  // Fetch a single analysis by ID (public)
   getById: (id) => api.get(`/api/analyze/${id}`),
+
+  // Delete an analysis (requires auth)
   delete: (id) => api.delete(`/api/analyze/${id}`),
 };
 
