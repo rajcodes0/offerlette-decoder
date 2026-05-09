@@ -48,22 +48,26 @@ export default function Dashboard() {
     e.preventDefault();
     setDragOver(false);
     const f = e.dataTransfer.files[0];
-    if (f && f.type === "application/file") {
+    if (f && f.type === "application/pdf") {
       if (f.size > 5 * 1024 * 1024) {
-        toast.error("File exceeds 5MB limit");
+        toast.error("PDF exceeds 5MB limit");
         return;
       }
       setFile(f);
     } else {
-      toast.error("Only file files are supported");
+      toast.error("Only PDF files are supported");
     }
   };
 
   const handleFileSelect = (e) => {
     const f = e.target.files[0];
     if (f) {
+      if (f.type !== "application/pdf") {
+        toast.error("Only PDF files are supported");
+        return;
+      }
       if (f.size > 5 * 1024 * 1024) {
-        toast.error("File exceeds 5MB limit");
+        toast.error("PDF exceeds 5MB limit");
         return;
       }
       setFile(f);
@@ -75,7 +79,7 @@ export default function Dashboard() {
 
   const handleAnalyze = async () => {
     if (tab === "upload" && !file) {
-      toast.error("Please select a file file");
+      toast.error("Please select a PDF file");
       return;
     }
     if (tab === "text" && !text.trim()) {
@@ -195,6 +199,21 @@ export default function Dashboard() {
               >
                 Status: System Online
               </span>
+              <div style={{ marginLeft: 12 }}>
+                <button
+                  onClick={() => navigate("/checkout")}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: "1px solid var(--border)",
+                    background: "var(--bg-card)",
+                    cursor: "pointer",
+                    fontWeight: 700,
+                  }}
+                >
+                  Upgrade
+                </button>
+              </div>
             </div>
           </div>
 
@@ -268,7 +287,7 @@ export default function Dashboard() {
               <input
                 ref={fileRef}
                 type="file"
-                accept=".file"
+                accept=".pdf,application/pdf"
                 style={{ display: "none" }}
                 onChange={handleFileSelect}
               />
@@ -292,7 +311,7 @@ export default function Dashboard() {
                       marginBottom: 16,
                     }}
                   >
-                    {(file.size / 1024).toFixed(0)} KB · file Document
+                    {(file.size / 1024).toFixed(0)} KB · PDF Document
                   </div>
                   <button
                     onClick={(e) => {
@@ -332,7 +351,7 @@ export default function Dashboard() {
                   <div
                     style={{ fontWeight: 600, fontSize: 16, marginBottom: 6 }}
                   >
-                    Select a document to begin
+                    Select a PDF document to begin
                   </div>
                   <div
                     style={{
@@ -343,7 +362,7 @@ export default function Dashboard() {
                       textTransform: "uppercase",
                     }}
                   >
-                    file up to 5MB
+                    PDF up to 5MB
                   </div>
                   <button
                     className="btn btn-outline"

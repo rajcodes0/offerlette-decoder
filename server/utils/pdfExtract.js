@@ -1,6 +1,4 @@
-// utils/fileExtract.js
-// Uses pdf-parse (the correct package for PDF extraction)
-import {pdf }from 'pdf-parse';
+import * as pdfParse from "pdf-parse";
 
 /**
  * Extracts plain text from a file buffer.
@@ -13,17 +11,15 @@ async function extractText(buffer) {
   }
 
   try {
-    // ✅ Correct usage: pdf-parse directly accepts buffer
-    const data = await pdf(buffer);
-    
-    // data.text contains all pages joined with newlines
+    // ✅ Use pdfParse.default() - this works with CommonJS modules
+    const data = await pdfParse.default(buffer);
+
     let fullText = data.text || "";
 
-    // Clean up common file artifacts
     fullText = fullText
-      .replace(/ +/g, " ") // collapse multiple spaces
-      .replace(/\n{3,}/g, "\n\n") // max 2 consecutive newlines
-      .replace(/\bPage \d+ of \d+\b/gi, "") // remove page number lines
+      .replace(/ +/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .replace(/\bPage \d+ of \d+\b/gi, "")
       .trim();
 
     if (!fullText || fullText.length < 20) {
@@ -33,15 +29,14 @@ async function extractText(buffer) {
     }
 
     console.log(
-      `PDF extracted successfully: ${fullText.length} characters, ${data.numpages} page(s)`
+      `PDF extracted successfully: ${fullText.length} characters, ${data.numpages} page(s)`,
     );
     return fullText;
   } catch (error) {
-    // Re-throw with a user-friendly message (keeps original detail for logs)
     console.error("PDF extraction error:", error.message);
 
     if (error.message.includes("No text could be extracted")) {
-      throw error; // already user-friendly
+      throw error;
     }
 
     if (

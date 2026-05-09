@@ -32,7 +32,7 @@ api.interceptors.response.use(
       window.location.href = "/login";
     }
     return Promise.reject(error);
-  }
+  },
 );
 
 export const authAPI = {
@@ -44,12 +44,20 @@ export const authAPI = {
 };
 
 export const analysisAPI = {
-  // ✅ explicitly pass multipart headers so axios doesn't override
-  analyze: (formData) =>
-    api.post("/api/analyze", formData, {
+  // File upload endpoint (matches server /api/analyze/file)
+  analyzefile: (formData) =>
+    api.post("/api/analyze/file", formData, {
       headers: { "Content-Type": "multipart/form-data" },
     }),
-  getAll: () => api.get("/api/analyze"),        // ✅ was /api/analyses (404)
+
+  // Raw text analysis endpoint (matches server /api/analyze/text)
+  analyzeText: (text) => api.post("/api/analyze/text", { text }),
+  // Backwards-compatible alias
+  analyze: (formData) =>
+    api.post("/api/analyze/file", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    }),
+  getAll: () => api.get("/api/analyze"), // ✅ was /api/analyses (404)
   getById: (id) => api.get(`/api/analyze/${id}`),
   delete: (id) => api.delete(`/api/analyze/${id}`),
 };
