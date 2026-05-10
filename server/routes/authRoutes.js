@@ -9,64 +9,76 @@ const router = express.Router();
 router.post("/register", registerUser);
 router.post("/login", loginUser);
 
-// ─── Email transporter ────────────────────────────────────────────────────────
-function createTransporter() {
-  return nodemailer.createTransport({
+// ─── Email transporter ─────────────────────────────────────────────────────────
+// Verifies SMTP connection before trying to send.
+async function createVerifiedTransporter() {
+  const transporter = nodemailer.createTransport({
     host: "smtp.gmail.com",
     port: 587,
-    secure: false,
+    secure: false, // STARTTLS
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS, // Gmail App Password — NOT your account password
+      pass: process.env.EMAIL_PASS, // Must be a Gmail App Password, NOT your account password
     },
+    // Increase timeouts for slow SMTP responses
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
+
+  // Verify connection — throws if credentials are wrong
+  await transporter.verify();
+  return transporter;
 }
 
-// ─── POST /api/auth/forgot-password ──────────────────────────────────────────
+// ─── POST /api/auth/forgot-password ────────────────────────────────────────────
 router.post("/forgot-password", async (req, res) => {
   let user;
   try {
     const { email } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ message: "A valid email is required" });
     }
 
     user = await User.findOne({ email: email.toLowerCase().trim() });
 
+    // Security: always return success whether user exists or not (prevent enumeration)
     if (!user) {
-      // Security: same response whether email exists or not (prevents enumeration)
       return res.json({
         success: true,
         message: "If that email is registered, a reset link has been sent.",
       });
     }
 
+    // Generate token and save hashed version to DB
     const rawToken = user.getResetPasswordToken();
     await user.save();
 
-    // FRONTEND_URL must be your deployed frontend URL in production .env
-    // e.g. FRONTEND_URL=https://offerlette-decoder.pages.dev
-    // The reset link opens ResetPassword.jsx in the browser — NOT the backend.
-    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${rawToken}`;
+    // Build the reset URL — points to the FRONTEND, not the backend
+    // FRONTEND_URL must be set in .env, e.g.:
+    //   FRONTEND_URL=https://your-app.pages.dev
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const resetUrl = `${frontendUrl}/reset-password/${rawToken}`;
 
-    // Dev fallback — no email configured
+    // ── Dev shortcut: no email env vars configured ─────────────────────────────
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn("⚠️  Email not configured. Reset URL (dev only):", resetUrl);
+      console.warn("⚠️  EMAIL_USER / EMAIL_PASS not set. Reset URL (dev only):", resetUrl);
       return res.json({
         success: true,
-        message:
-          "Reset link created. Check server logs (email not configured in this environment).",
+        message: "Reset link created. Check server logs (email not configured in this environment).",
+        // Only expose URL in non-production
         ...(process.env.NODE_ENV !== "production" && { resetUrl }),
       });
     }
 
-    const transporter = createTransporter();
+    // ── Send email ──────────────────────────────────────────────────────────────
+    const transporter = await createVerifiedTransporter();
 
     await transporter.sendMail({
-      from: `"OfferLetter Decoder" <${process.env.EMAIL_USER}>`,
+      from: `"LexAnalytica" <${process.env.EMAIL_USER}>`,
       to: user.email,
-      subject: "Password Reset — OfferLetter Decoder",
+      subject: "Password Reset — LexAnalytica",
       text: `Reset your password here (valid 10 minutes):\n\n${resetUrl}\n\nIf you didn't request this, ignore this email.`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -85,32 +97,38 @@ router.post("/forgot-password", async (req, res) => {
       `,
     });
 
-    res.json({ success: true, message: "Reset email sent. Check your inbox." });
+    return res.json({ success: true, message: "Reset email sent. Check your inbox." });
   } catch (error) {
     console.error("Forgot password error:", error);
 
-    // Clear tokens so they don't get stuck in DB on failure
+    // Clear tokens so they don't get stuck in DB if email failed to send
     if (user) {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
-      await user.save().catch(console.error);
+      await user.save().catch((e) => console.error("Failed to clear reset token:", e));
     }
 
-    res.status(500).json({
+    // Give a specific message for SMTP auth failures (common misconfiguration)
+    if (error.message?.includes("Invalid login") || error.message?.includes("535")) {
+      return res.status(500).json({
+        message:
+          "Email configuration error. Please ensure EMAIL_USER and EMAIL_PASS (Gmail App Password) are set correctly.",
+      });
+    }
+
+    return res.status(500).json({
       message: "Could not send reset email. Please try again later.",
     });
   }
 });
 
-// ─── POST /api/auth/reset-password/:token ─────────────────────────────────────
+// ─── POST /api/auth/reset-password/:token ──────────────────────────────────────
 router.post("/reset-password/:token", async (req, res) => {
   try {
     const { password } = req.body;
 
-    if (!password || password.length < 6) {
-      return res
-        .status(400)
-        .json({ message: "Password must be at least 6 characters" });
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
     // Hash the incoming raw token to match what's stored in DB
@@ -126,25 +144,23 @@ router.post("/reset-password/:token", async (req, res) => {
 
     if (!user) {
       return res.status(400).json({
-        message:
-          "This reset link is invalid or has expired. Please request a new one.",
+        message: "This reset link is invalid or has expired. Please request a new one.",
       });
     }
 
-    // Set new password — pre-save hook on User model will hash it
+    // Set new password — User model pre-save hook will hash it
     user.password = password;
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
-
     await user.save();
 
-    res.json({
+    return res.json({
       success: true,
       message: "Password updated successfully. You can now log in.",
     });
   } catch (error) {
     console.error("Reset password error:", error);
-    res.status(500).json({ message: "Server error. Please try again." });
+    return res.status(500).json({ message: "Server error. Please try again." });
   }
 });
 

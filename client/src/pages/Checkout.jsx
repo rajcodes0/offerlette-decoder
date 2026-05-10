@@ -1,71 +1,89 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { paymentAPI } from "../services/api";
+import { useAuth } from "../contexts/AuthContext";
 import "../styles/Checkout.css";
 
-export default function Checkout() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  const scriptLoaded = useRef(false);
+const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
 
-  // Load Razorpay script on mount
-  useEffect(() => {
-    if (scriptLoaded.current) return;
+function loadRazorpayScript() {
+  return new Promise((resolve, reject) => {
+    // Don't inject again if already loaded
+    if (window.Razorpay) return resolve(true);
 
-    const existing = document.querySelector(
-      'script[src="https://checkout.razorpay.com/v1/checkout.js"]'
-    );
+    const existing = document.querySelector(`script[src="${RAZORPAY_SCRIPT_URL}"]`);
     if (existing) {
-      scriptLoaded.current = true;
+      // Script tag exists but Razorpay object might not be ready yet — wait for it
+      existing.addEventListener("load", () => resolve(true));
+      existing.addEventListener("error", () => reject(new Error("Razorpay script failed to load")));
       return;
     }
 
     const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.src = RAZORPAY_SCRIPT_URL;
     script.async = true;
-    script.onload = () => {
-      scriptLoaded.current = true;
-    };
-    script.onerror = () => {
-      console.error("Failed to load Razorpay script");
-    };
+    script.onload = () => resolve(true);
+    script.onerror = () => reject(new Error("Failed to load Razorpay script. Check your internet connection."));
     document.body.appendChild(script);
+  });
+}
+
+export default function Checkout() {
+  const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const scriptReady = useRef(false);
+
+  // Pre-load Razorpay script on mount so the first click is instant
+  useEffect(() => {
+    loadRazorpayScript()
+      .then(() => { scriptReady.current = true; })
+      .catch((e) => console.warn("Razorpay preload failed:", e.message));
   }, []);
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!user) {
+      navigate("/login", { state: { from: { pathname: "/checkout" } } });
+    }
+  }, [user, navigate]);
 
   const handlePayment = async () => {
     try {
       setLoading(true);
       setError("");
 
+      // Ensure script is loaded before opening modal
+      if (!window.Razorpay) {
+        await loadRazorpayScript();
+      }
+
+      // Create backend order
       const response = await paymentAPI.createOrder(
         100,
-        "Premium Access — Offer Letter Decoder"
+        "Premium Access — LexAnalytica"
       );
       const { order, keyId } = response.data;
 
-      if (!window.Razorpay) {
-        throw new Error(
-          "Razorpay script failed to load. Please refresh the page and try again."
-        );
+      if (!order?.id || !keyId) {
+        throw new Error("Invalid order response from server");
       }
-
-      const userRaw = localStorage.getItem("lex_user");
-      const userEmail = userRaw ? JSON.parse(userRaw).email : "";
 
       const options = {
         key: keyId,
-        amount: order.amount,
-        currency: order.currency,
-        name: "OfferLetter Decoder",
+        amount: order.amount,   // already in paise from backend
+        currency: order.currency || "INR",
+        name: "LexAnalytica",
         description: "Premium Access — Unlimited Analysis",
         order_id: order.id,
         handler: async (rzpResponse) => {
           await handlePaymentSuccess(rzpResponse, order.id);
         },
         prefill: {
-          email: userEmail || "",
+          email: user?.email || "",
+          name: user?.name || "",
         },
         theme: {
           color: "#6c63ff",
@@ -74,14 +92,24 @@ export default function Checkout() {
           ondismiss: () => {
             setLoading(false);
           },
+          escape: true,
+          backdropclose: false,
         },
       };
 
       const razorpay = new window.Razorpay(options);
+
+      // Handle payment failures (e.g., card declined)
+      razorpay.on("payment.failed", (response) => {
+        console.error("Payment failed:", response.error);
+        setError(`Payment failed: ${response.error.description || "Please try a different payment method."}`);
+        setLoading(false);
+      });
+
       razorpay.open();
     } catch (err) {
-      console.error("Payment error:", err);
-      setError(err.message || "Payment initiation failed. Please try again.");
+      console.error("Payment initiation error:", err);
+      setError(err.response?.data?.error || err.message || "Payment initiation failed. Please try again.");
       setLoading(false);
     }
   };
@@ -95,22 +123,31 @@ export default function Checkout() {
       );
 
       if (verifyResponse.data.success) {
+        // Update premium flag in localStorage AND in auth context
+        localStorage.setItem("lex_premium", "true");
+        updateUser({ isPremium: true });
+
         setSuccess(true);
         setLoading(false);
-        localStorage.setItem("lex_premium", "true");
 
-        // Use React Router navigate instead of window.location.href
-        // so routing works correctly in both dev and production
         setTimeout(() => {
           navigate("/dashboard", { replace: true });
         }, 2000);
+      } else {
+        throw new Error("Verification returned unsuccessful");
       }
     } catch (err) {
       console.error("Verification error:", err);
-      setError("Payment verification failed. Please contact support.");
+      setError(
+        "Payment was received but verification failed. Please contact support with your payment ID: " +
+          rzpResponse.razorpay_payment_id
+      );
       setLoading(false);
     }
   };
+
+  // Don't render until auth is confirmed
+  if (!user) return null;
 
   return (
     <div className="checkout-container">
@@ -147,7 +184,7 @@ export default function Checkout() {
           onClick={handlePayment}
           disabled={loading || success}
         >
-          {loading ? "Processing..." : success ? "Payment Complete!" : "Pay Now"}
+          {loading ? "Processing..." : success ? "Payment Complete! ✓" : "Pay ₹100 Now"}
         </button>
 
         <p className="secure-note">💳 Secure payment powered by Razorpay</p>

@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import toast from "react-hot-toast";
 import { useAuth } from "../contexts/AuthContext";
@@ -14,18 +14,42 @@ export default function Login() {
     formState: { errors },
   } = useForm();
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // If already logged in, redirect to dashboard (or the page they came from)
+  useEffect(() => {
+    if (user) {
+      const from = location.state?.from?.pathname || "/dashboard";
+      navigate(from, { replace: true });
+    }
+  }, [user, navigate, location]);
 
   const onSubmit = async (data) => {
     setLoading(true);
     try {
       const res = await authAPI.login(data);
-      login(res.data.token, res.data.user);
-      toast.success(`Welcome back, ${res.data.user.name}! 🎉`);
-      navigate("/dashboard");
+      const { token, user: userData } = res.data;
+
+      if (!token || !userData) {
+        throw new Error("Invalid response from server — missing token or user");
+      }
+
+      // Persist to localStorage and update context state
+      login(token, userData);
+
+      toast.success(`Welcome back, ${userData.name}! 🎉`);
+
+      // Navigate AFTER login() has updated state
+      const from = location.state?.from?.pathname || "/dashboard";
+      navigate(from, { replace: true });
     } catch (err) {
-      toast.error(err.response?.data?.message || "Invalid credentials");
+      const msg =
+        err.response?.data?.message ||
+        err.message ||
+        "Invalid credentials";
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -81,6 +105,7 @@ export default function Login() {
                   className="input-field"
                   type="email"
                   placeholder="your@email.com"
+                  autoComplete="email"
                   {...register("email", { required: "Email is required" })}
                 />
                 {errors.email && (
@@ -94,6 +119,7 @@ export default function Login() {
                   className="input-field"
                   type="password"
                   placeholder="••••••••••••"
+                  autoComplete="current-password"
                   {...register("password", {
                     required: "Password is required",
                   })}

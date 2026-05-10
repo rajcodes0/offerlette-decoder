@@ -49,10 +49,12 @@ router.post(
   "/analyze",
   optionalAuth,
   (req, res, next) => {
-    // Only run multer if the request is multipart (file upload).
-    // For JSON text requests, skip multer entirely.
+    // Run multer only when the request truly is multipart.
+    // Use a broader check — some proxies add charset or boundary variations.
     const contentType = req.headers["content-type"] || "";
-    if (contentType.includes("multipart/form-data")) {
+    const isMultipart = contentType.toLowerCase().includes("multipart/form-data");
+
+    if (isMultipart) {
       upload.single("offerFile")(req, res, (err) => {
         if (err instanceof multer.MulterError) {
           return res.status(400).json({ error: `Upload error: ${err.message}` });
@@ -160,6 +162,7 @@ router.get("/analyze/:id", async (req, res) => {
 });
 
 // ─── DELETE /api/analyze/:id – auth required ─────────────────────────────────
+// IMPORTANT: route is /analyze/:id (singular) — api.js must call /api/analyze/:id
 router.delete("/analyze/:id", authProtect, async (req, res) => {
   try {
     const analysis = await Analysis.findOneAndDelete({

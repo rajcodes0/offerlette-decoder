@@ -5,21 +5,32 @@ export const registerUser = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // ✅ FIXED: Validate required fields upfront with clear messages
     if (!name || !email || !password) {
       return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+
+    if (typeof name !== "string" || name.trim().length < 2) {
+      return res.status(400).json({ message: "Name must be at least 2 characters" });
+    }
+
+    if (typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ message: "A valid email is required" });
     }
 
     if (password.length < 6) {
       return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
-    const existingUser = await User.findOne({ email });
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingUser) {
       return res.status(400).json({ message: "An account with this email already exists" });
     }
 
-    const newUser = new User({ name, email, password });
+    const newUser = new User({
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      password,
+    });
     await newUser.save();
 
     res.status(201).json({
@@ -49,9 +60,9 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email });
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
     if (!user) {
-      // ✅ FIXED: Use same message for missing user and wrong password (prevents email enumeration)
+      // Same message for missing user and wrong password — prevents email enumeration
       return res.status(401).json({ message: "Invalid email or password" });
     }
 
@@ -69,6 +80,7 @@ export const loginUser = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        isPremium: user.isPremium || false,
       },
     });
   } catch (error) {
