@@ -10,7 +10,7 @@ dotenv.config();
 const app = express();
 
 const allowedOrigins = [
-  process.env.CLIENT_URL,
+  process.env.FRONTEND_URL,
   "https://offerlette-decoder.pages.dev",
   "http://localhost:5173",
 ].filter(Boolean);
