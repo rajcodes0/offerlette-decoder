@@ -33,10 +33,31 @@ app.use("/api/payment", paymentRoutes);
 
 app.get("/", (_req, res) => res.json({ message: "API running" }));
 
+// ─── 404 handler ─────────────────────────────────────────────────────
 app.use((_req, res) => res.status(404).json({ error: "Route not found" }));
+
+// ─── Global error handler (catches sync + async errors from Express) ─
 app.use((err, _req, res, _next) => {
-  console.error(err);
-  res.status(500).json({ error: err.message });
+  console.error("Unhandled Express error:", err);
+  const status = err.status || err.statusCode || 500;
+  res.status(status).json({
+    error: process.env.NODE_ENV === "production"
+      ? "Internal server error"
+      : err.message,
+  });
+});
+
+// ─── Global handlers for uncaught errors (prevents silent crashes) ──
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("❌ Unhandled Promise Rejection:", reason);
+  // In production you may want to exit gracefully:
+  // process.exit(1);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("❌ Uncaught Exception:", error);
+  // Uncaught exceptions leave the process in an unreliable state — exit
+  process.exit(1);
 });
 
 const PORT = process.env.PORT || 5000;

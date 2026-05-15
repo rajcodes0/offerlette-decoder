@@ -1,11 +1,9 @@
 // utils/pdfExtract.js
-import * as pdfModule from "pdf-parse";
-
-// pdfModule.default contains the actual function
-const pdf = pdfModule.default;
+import { PDFParse } from "pdf-parse";
 
 /**
  * Extracts plain text from a PDF buffer.
+ * Uses pdf-parse v2 `PDFParse` class API.
  * @param {Buffer} buffer - Raw PDF buffer from multer memoryStorage
  * @returns {Promise<string>} Cleaned extracted text
  */
@@ -14,10 +12,12 @@ async function extractText(buffer) {
     throw new Error("Empty file buffer received");
   }
 
+  let parser;
   try {
-    const data = await pdf(buffer);
+    parser = new PDFParse({ data: buffer });
+    const textResult = await parser.getText();
 
-    let fullText = data.text || "";
+    let fullText = textResult.text || "";
 
     fullText = fullText
       .replace(/ +/g, " ")                        // collapse multiple spaces
@@ -31,8 +31,11 @@ async function extractText(buffer) {
       );
     }
 
+    const infoResult = await parser.getInfo();
+    const numPages = infoResult.total || "unknown";
+
     console.log(
-      `PDF extracted: ${fullText.length} characters across ${data.numpages} page(s)`
+      `PDF extracted: ${fullText.length} characters across ${numPages} page(s)`
     );
 
     return fullText;
@@ -60,6 +63,15 @@ async function extractText(buffer) {
     }
 
     throw new Error(`Failed to extract text from PDF: ${error.message}`);
+  } finally {
+    // Always clean up the parser to free memory
+    if (parser) {
+      try {
+        await parser.destroy();
+      } catch {
+        // ignore cleanup errors
+      }
+    }
   }
 }
 

@@ -46,14 +46,14 @@ export const analysisAPI = {
   analyzeFile: (file) => {
     const formData = new FormData();
     formData.append("offerFile", file);
-    return api.post("/api/analyze", formData);
+    return api.post("/api/analyze/pdf", formData);
   },
-  // alias for compatibility
+  // alias for backward compatibility
   analyzefile: (file) => analysisAPI.analyzeFile(file),
-  analyzeText: (text) => api.post("/api/analyze", { text }),
+  analyzeText: (text) => api.post("/api/analyze/text", { text }),
   getAll: () => api.get("/api/analyses"),
   getById: (id) => api.get(`/api/analyze/${id}`),
-  delete: (id) => api.delete(`/api/analyze/${id}`),   // ← singular
+  delete: (id) => api.delete(`/api/analyze/${id}`),
 };
 
 export const paymentAPI = {

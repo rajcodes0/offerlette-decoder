@@ -1,70 +1,55 @@
 // utils/groq.js
+import Groq from "groq-sdk";
 
-// Helper to fetch available models and choose the best for text chat
-async function getBestGroqModel(apiKey) {
+// ─── Validate at startup ─────────────────────────────────────────────
+const apiKey = process.env.GROQ_API_KEY;
+if (!apiKey) {
+  console.error("❌ GROQ_API_KEY is missing from environment variables");
+}
+
+// Instantiate the SDK client (reused across requests)
+const groqClient = apiKey ? new Groq({ apiKey }) : null;
+
+// ─── Model selection ─────────────────────────────────────────────────
+const PREFERRED_MODELS = [
+  "llama-3.3-70b-versatile",
+  "mixtral-8x7b-32768",
+  "gemma2-9b-it",
+  "llama-3.1-8b-instant",
+];
+
+async function getBestGroqModel() {
+  if (!groqClient) return PREFERRED_MODELS[0];
+
   try {
-    const response = await fetch("https://api.groq.com/openai/v1/models", {
-      headers: { "Authorization": `Bearer ${apiKey}` }
-    });
-    if (!response.ok) throw new Error(`Models fetch failed: ${response.status}`);
-    const data = await response.json();
-    
-    // List of preferred models in order of priority
-    const preferredOrder = [
-      "llama-3.3-70b-versatile",
-      "mixtral-8x7b-32768",
-      "gemma2-9b-it",
-      "llama-3.1-8b-instant"
-    ];
-    
-    // Find the first preferred model that actually exists in the account
-    for (const preferred of preferredOrder) {
-      if (data.data.some(m => m.id === preferred && m.active === true)) {
-        return preferred;
-      }
+    const list = await groqClient.models.list();
+    const activeIds = new Set();
+
+    // list.data is an array of model objects
+    for (const m of list.data) {
+      if (m.active !== false) activeIds.add(m.id);
     }
-    
-    // Fallback: pick any active, non-embedding, non-whisper model
-    const anyModel = data.data.find(m =>
-      m.active &&
-      !m.id.includes("embed") &&
-      !m.id.includes("whisper")
+
+    for (const preferred of PREFERRED_MODELS) {
+      if (activeIds.has(preferred)) return preferred;
+    }
+
+    // Fallback: any active, non-embedding, non-whisper model
+    const fallback = list.data.find(
+      (m) =>
+        m.active !== false &&
+        !m.id.includes("embed") &&
+        !m.id.includes("whisper")
     );
-    return anyModel?.id || "llama-3.3-70b-versatile";
+    return fallback?.id || PREFERRED_MODELS[0];
   } catch (error) {
     console.warn("Could not fetch Groq model list, using fallback.", error.message);
-    return "llama-3.3-70b-versatile";
+    return PREFERRED_MODELS[0];
   }
 }
 
-async function analyzeWithGroq(offerText) {
-  try {
-    if (!offerText || offerText.trim().length === 0) {
-      throw new Error("No text provided for analysis");
-    }
-
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      throw new Error("GROQ_API_KEY is missing from environment variables");
-    }
-
-    const apiUrl = "https://api.groq.com/openai/v1/chat/completions";
-    
-    // 1. Get the best model dynamically (or fallback)
-    let chatModel = await getBestGroqModel(apiKey);
-    console.log(`Using Groq model: ${chatModel}`);
-
-    // 2. Fallback static list in case the chosen model fails
-    const fallbackModels = [
-      "mixtral-8x7b-32768",
-      "gemma2-9b-it",
-      "llama-3.1-8b-instant"
-    ];
-    
-    // If the dynamic model is not in fallback list, prepend it
-    const modelsToTry = [chatModel, ...fallbackModels.filter(m => m !== chatModel)];
-
-    const systemPrompt = `You are a legal and HR expert. Analyze this job offer letter.
+// ─── System prompt ───────────────────────────────────────────────────
+const SYSTEM_PROMPT = `You are a legal and HR expert. Analyze this job offer letter.
 
 IMPORTANT: Return ONLY valid JSON. No markdown, no extra text, no explanations outside the JSON.
 
@@ -90,59 +75,68 @@ Required JSON structure:
   "topRedFlags": ["flag1", "flag2"]
 }`;
 
-    const userPrompt = `Offer letter text:\n"""\n${offerText}\n"""\n\nReturn ONLY the JSON object.`;
-
-    let lastError = null;
-    for (const model of modelsToTry) {
-      try {
-        console.log(`Trying Groq model: ${model}`);
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${apiKey}`
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            temperature: 0.2
-          })
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.warn(`Model ${model} failed (${response.status}): ${errorText}`);
-          lastError = new Error(`Groq API error (${response.status}): ${errorText}`);
-          continue;
-        }
-
-        const data = await response.json();
-        const content = data.choices[0].message.content;
-
-        // Clean JSON
-        let cleanJSON = content.replace(/```json\n?/g, "").replace(/```\n?/g, "");
-        const parsed = JSON.parse(cleanJSON);
-
-        if (!parsed.clauses || !Array.isArray(parsed.clauses)) {
-          throw new Error("Invalid response: missing clauses");
-        }
-
-        console.log(`✅ Success with Groq model: ${model}, clauses: ${parsed.clauses.length}`);
-        return parsed;
-      } catch (err) {
-        console.warn(`Groq model ${model} error:`, err.message);
-        lastError = err;
-      }
-    }
-
-    throw lastError || new Error("All Groq models failed");
-  } catch (error) {
-    console.error("Groq API error:", error.message);
-    throw new Error(`Analysis failed: ${error.message}`);
+// ─── Core analysis function ──────────────────────────────────────────
+async function analyzeWithGroq(offerText) {
+  if (!offerText || offerText.trim().length === 0) {
+    throw new Error("No text provided for analysis");
   }
+
+  if (!groqClient) {
+    throw new Error("GROQ_API_KEY is missing from environment variables");
+  }
+
+  const bestModel = await getBestGroqModel();
+  console.log(`Using Groq model: ${bestModel}`);
+
+  // Build ordered list: dynamic best + static fallbacks (deduplicated)
+  const modelsToTry = [
+    bestModel,
+    ...PREFERRED_MODELS.filter((m) => m !== bestModel),
+  ];
+
+  const userPrompt = `Offer letter text:\n"""\n${offerText}\n"""\n\nReturn ONLY the JSON object.`;
+
+  let lastError = null;
+
+  for (const model of modelsToTry) {
+    try {
+      console.log(`Trying Groq model: ${model}`);
+
+      const chatCompletion = await groqClient.chat.completions.create({
+        model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.2,
+      });
+
+      const content = chatCompletion.choices?.[0]?.message?.content;
+      if (!content) {
+        throw new Error("Empty response from Groq API");
+      }
+
+      // Clean possible markdown fences
+      const cleanJSON = content
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
+
+      const parsed = JSON.parse(cleanJSON);
+
+      if (!parsed.clauses || !Array.isArray(parsed.clauses)) {
+        throw new Error("Invalid response: missing clauses array");
+      }
+
+      console.log(`✅ Success with Groq model: ${model}, clauses: ${parsed.clauses.length}`);
+      return parsed;
+    } catch (err) {
+      console.warn(`Groq model ${model} error:`, err.message);
+      lastError = err;
+    }
+  }
+
+  throw lastError || new Error("All Groq models failed");
 }
 
 export default analyzeWithGroq;

@@ -44,47 +44,53 @@ initTransporter();
 
 // ─── FORGOT PASSWORD ────────────────────────────────────────────────
 router.post("/forgot-password", async (req, res) => {
-  const { email } = req.body;
-  if (!email?.includes("@")) {
-    return res.status(400).json({ message: "Valid email required" });
-  }
-
-  const user = await User.findOne({ email: email.toLowerCase().trim() });
-  if (!user) {
-    return res.json({ success: true, message: "If email exists, reset link sent." });
-  }
-
-  const rawToken = user.getResetPasswordToken();
-  await user.save();
-
-  const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
-  const resetUrl = `${frontendUrl}/reset-password/${rawToken}`;
-
-  // No email config – show link in console
-  if (!transporter) {
-    console.log("🔗 Reset link (dev only):", resetUrl);
-    return res.json({
-      success: true,
-      message: "Reset link generated (email not configured). Check server logs.",
-      ...(process.env.NODE_ENV !== "production" && { resetUrl }),
-    });
-  }
-
   try {
-    await transporter.sendMail({
-      from: `"LexAnalytica" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: "Password Reset – LexAnalytica",
-      text: `Reset your password (10 min): ${resetUrl}`,
-      html: `<a href="${resetUrl}">Reset password</a> – valid 10 minutes.`,
-    });
-    res.json({ success: true, message: "Reset email sent." });
-  } catch (err) {
-    console.error("Send email error:", err);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
+    const { email } = req.body;
+    if (!email || typeof email !== "string" || !email.includes("@")) {
+      return res.status(400).json({ message: "Valid email required" });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      // Same response whether user exists or not — prevents email enumeration
+      return res.json({ success: true, message: "If email exists, reset link sent." });
+    }
+
+    const rawToken = user.getResetPasswordToken();
     await user.save();
-    res.status(500).json({ message: "Could not send reset email. Try again later." });
+
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const resetUrl = `${frontendUrl}/reset-password/${rawToken}`;
+
+    // No email config – show link in console
+    if (!transporter) {
+      console.log("🔗 Reset link (dev only):", resetUrl);
+      return res.json({
+        success: true,
+        message: "Reset link generated (email not configured). Check server logs.",
+        ...(process.env.NODE_ENV !== "production" && { resetUrl }),
+      });
+    }
+
+    try {
+      await transporter.sendMail({
+        from: `"LexAnalytica" <${process.env.EMAIL_USER}>`,
+        to: user.email,
+        subject: "Password Reset – LexAnalytica",
+        text: `Reset your password (10 min): ${resetUrl}`,
+        html: `<a href="${resetUrl}">Reset password</a> – valid 10 minutes.`,
+      });
+      res.json({ success: true, message: "Reset email sent." });
+    } catch (err) {
+      console.error("Send email error:", err.message);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      res.status(500).json({ message: "Could not send reset email. Try again later." });
+    }
+  } catch (error) {
+    console.error("Forgot password error:", error.message);
+    res.status(500).json({ message: "Server error. Please try again later." });
   }
 });
 
@@ -92,11 +98,16 @@ router.post("/forgot-password", async (req, res) => {
 router.post("/reset-password/:token", async (req, res) => {
   try {
     const { password } = req.body;
-    if (!password || password.length < 6) {
-      return res.status(400).json({ message: "Password min 6 chars" });
+    if (!password || typeof password !== "string" || password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
     }
 
-    const hashedToken = crypto.createHash("sha256").update(req.params.token).digest("hex");
+    const token = req.params.token;
+    if (!token || typeof token !== "string" || token.length < 10) {
+      return res.status(400).json({ message: "Invalid reset token" });
+    }
+
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() },
@@ -113,7 +124,7 @@ router.post("/reset-password/:token", async (req, res) => {
 
     res.json({ success: true, message: "Password updated." });
   } catch (error) {
-    console.error(error);
+    console.error("Reset password error:", error.message);
     res.status(500).json({ message: "Server error." });
   }
 });
