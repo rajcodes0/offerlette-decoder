@@ -240,3 +240,20 @@ input, textarea {
 .react-hot-toast {
   font-family: var(--font-body) !important;
 }
+
+/* ── Responsive adjustments ── */
+@media (max-width: 900px) {
+  .dashboard-main {
+    grid-template-columns: 1fr !important;
+    padding: 24px 16px !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .dashboard-main {
+    padding: 16px !important;
+  }
+  .stats-bar {
+    grid-template-columns: 1fr !important;
+  }
+}

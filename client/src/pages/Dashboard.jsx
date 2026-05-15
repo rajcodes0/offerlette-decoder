@@ -128,6 +128,7 @@ export default function Dashboard() {
       )}
 
       <main
+        className="dashboard-main"
         style={{
           flex: 1,
           maxWidth: 1200,
@@ -425,6 +426,7 @@ export default function Dashboard() {
 
           {/* Stats bar */}
           <div
+            className="stats-bar"
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(3, 1fr)",

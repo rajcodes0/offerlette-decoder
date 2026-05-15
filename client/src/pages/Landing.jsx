@@ -1,23 +1,17 @@
-import React, { useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React from "react";
+import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import Navbar from "../components/Layout/Navbar";
 import Footer from "../components/Layout/Footer";
 
 export default function Landing() {
   const { user, loading } = useAuth();
-  const navigate = useNavigate();
 
-  // Redirect to dashboard if already logged in.
-  // Wait for auth loading to finish first — avoids a flash redirect on page load.
-  useEffect(() => {
-    if (!loading && user) {
-      navigate("/dashboard", { replace: true });
-    }
-  }, [user, loading, navigate]);
-
-  // While auth state is loading, render nothing (or a tiny spinner)
+  // While auth state is loading, render nothing
   if (loading) return null;
+  
+  // If user is already logged in, redirect immediately (prevents flash)
+  if (user) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="page">
